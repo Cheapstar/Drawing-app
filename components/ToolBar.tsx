@@ -26,5 +26,6 @@ const BOARD_TOOLS = [
   { value: "rectangle", label: "Rectangle" },
   { value: "line", label: "Line" },
   { value: "select", label: "Select" },
-  { value: "move", label: "Move" },
+  { value: "pencil", label: "Pencil" },
+  { value: "text", label: "Text" },
 ];
