@@ -10,6 +10,42 @@ import React, {
 import rough from "roughjs";
 import { Drawable } from "roughjs/bin/core";
 import { ToolBar } from "./ToolBar";
+import { UndoRedo } from "./UndoRedo";
+
+// Define types first to avoid forward reference issues
+export type TOOL = "rectangle" | "line" | "move" | "select";
+export type Action = "drawing" | "selecting" | "moving" | "resizing" | "none";
+export type Shapes = "rectangle" | "line";
+export type SelectedPosition =
+  | "inside"
+  | "tl"
+  | "tr"
+  | "bl"
+  | "br"
+  | "start"
+  | "end"
+  | "b"
+  | "t"
+  | "l"
+  | "r"
+  | null;
+export type Point = {
+  x: number;
+  y: number;
+};
+
+export type Element = {
+  type: Shapes;
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  offsetX?: number;
+  offsetY?: number;
+  selectedPosition?: SelectedPosition;
+  drawnShape: Drawable;
+};
 
 const generator = rough.generator();
 
@@ -22,6 +58,7 @@ const createRectangle = (
   const roughElement = generator.rectangle(x1, y1, width, height);
   return { x1, y1, x2: x1 + width, y2: y1 + height, drawnShape: roughElement };
 };
+
 const createLine = (x1: number, y1: number, x2: number, y2: number) => {
   const roughElement = generator.line(x1, y1, x2, y2);
   return { x1, y1, x2, y2, drawnShape: roughElement };
@@ -31,14 +68,16 @@ const getElementAtPosition = (
   clientX: number,
   clientY: number,
   elements: Element[]
-) => {
+): Partial<Element> & { selectedPosition: SelectedPosition } => {
   let position: SelectedPosition = null;
 
+  const foundElement = elements.find(({ type, x1, y1, x2, y2 }) => {
+    position = positionWithinShape(clientX, clientY, x1, y1, x2, y2, type);
+    return position !== null;
+  });
+
   return {
-    ...elements.find(({ type, x1, y1, x2, y2 }) => {
-      position = positionWithinShape(clientX, clientY, x1, y1, x2, y2, type);
-      return position;
-    }),
+    ...(foundElement || {}),
     selectedPosition: position,
   };
 };
@@ -51,7 +90,7 @@ const positionWithinShape = (
   x2: number,
   y2: number,
   type: Shapes
-) => {
+): SelectedPosition => {
   switch (type) {
     case "rectangle":
       return positionOnRectangle(clientX, clientY, x1, y1, x2, y2);
@@ -61,14 +100,16 @@ const positionWithinShape = (
         point(x1, y1),
         point(x2, y2)
       );
+    default:
+      return null;
   }
 };
 
-const nearPoint = (x1: number, y1: number, x2: number, y2: number) => {
+const nearPoint = (x1: number, y1: number, x2: number, y2: number): boolean => {
   return Math.abs(x2 - x1) < 10 && Math.abs(y2 - y1) < 10;
 };
 
-const point = (x: number, y: number) => ({ x, y });
+const point = (x: number, y: number): Point => ({ x, y });
 
 const positionOnRectangle = (
   clientX: number,
@@ -77,7 +118,7 @@ const positionOnRectangle = (
   y1: number,
   x2: number,
   y2: number
-) => {
+): SelectedPosition => {
   const topLeft = nearPoint(clientX, clientY, x1, y1) ? "tl" : null;
   const topRight = nearPoint(clientX, clientY, x2, y1) ? "tr" : null;
   const bottomLeft = nearPoint(clientX, clientY, x1, y2) ? "bl" : null;
@@ -130,7 +171,11 @@ const positionOnRectangle = (
   );
 };
 
-const positionOnLine = (clientPoint: Point, a: Point, b: Point) => {
+const positionOnLine = (
+  clientPoint: Point,
+  a: Point,
+  b: Point
+): SelectedPosition => {
   const offset =
     distance(a, b) - distance(a, clientPoint) - distance(b, clientPoint);
   const inside = Math.abs(offset) < 1 ? "inside" : null;
@@ -142,7 +187,7 @@ const positionOnLine = (clientPoint: Point, a: Point, b: Point) => {
   return inside || start || end;
 };
 
-const distance = (a: Point, b: Point) => {
+const distance = (a: Point, b: Point): number => {
   return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
 };
 
@@ -152,7 +197,7 @@ const createElement = (
   x2: number,
   y2: number,
   type: Shapes
-) => {
+): Element => {
   switch (type) {
     case "rectangle":
       return {
@@ -161,7 +206,9 @@ const createElement = (
         id: crypto.randomUUID(),
       };
     case "line":
-      return { ...createLine(x1, y1, x2, y2), type };
+      return { ...createLine(x1, y1, x2, y2), type, id: crypto.randomUUID() };
+    default:
+      throw new Error(`Unsupported shape type: ${type}`);
   }
 };
 
@@ -171,7 +218,7 @@ const adjustElementCoordinates = (
   y1: number,
   x2: number,
   y2: number
-) => {
+): { newX1: number; newY1: number; newX2: number; newY2: number } => {
   if (type === "rectangle") {
     const MinX = Math.min(x1, x2);
     const MaxX = Math.max(x1, x2);
@@ -203,7 +250,43 @@ const adjustElementCoordinates = (
   }
 };
 
+type HistoryState = Element[];
+type SetHistoryState = (
+  action: ((prevState: HistoryState) => HistoryState) | HistoryState,
+  overWrite?: boolean
+) => void;
+
+const useHistory = (
+  initialState: HistoryState = []
+): [HistoryState, SetHistoryState, () => void, () => void] => {
+  const [index, setIndex] = useState<number>(0);
+  const [history, setHistory] = useState<HistoryState[]>([initialState]);
+
+  const setState: SetHistoryState = (action, overWrite = false) => {
+    const newState =
+      typeof action === "function" ? action(history[index]) : action;
+
+    if (overWrite) {
+      const newHistory = [...history];
+      newHistory[index] = newState;
+      setHistory(newHistory);
+    } else {
+      const newHistory = [...history].slice(0, index + 1);
+      setHistory([...newHistory, newState]);
+      setIndex((prevState) => prevState + 1);
+    }
+  };
+
+  const undo = () => index > 0 && setIndex((prevState) => prevState - 1);
+  const redo = () =>
+    index < history.length - 1 && setIndex((prevState) => prevState + 1);
+
+  return [history[index] || [], setState, undo, redo];
+};
+
 export function WhiteBoard() {
+  const [elements, setElements, undo, redo] = useHistory([]);
+
   const factor = 1;
   const boardRef = useRef<HTMLCanvasElement>(null);
 
@@ -211,8 +294,7 @@ export function WhiteBoard() {
 
   const [action, setAction] = useState<Action>("none");
 
-  const [elements, setElements] = useState<Element[]>([]);
-  const [selectedElement, setSelectedElement] = useState<Element | null>();
+  const [selectedElement, setSelectedElement] = useState<Element | null>(null);
 
   const resizeCanvas = useCallback(() => {
     if (!boardRef.current) return;
@@ -229,12 +311,14 @@ export function WhiteBoard() {
 
   useLayoutEffect(() => {
     const canvas = document.querySelector("canvas") as HTMLCanvasElement;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+
     const rc = rough.canvas(canvas);
 
-    ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    elements.forEach((element) => {
+    elements.forEach((element: Element) => {
       rc.draw(element.drawnShape);
     });
 
@@ -257,7 +341,7 @@ export function WhiteBoard() {
     window.addEventListener("resize", resizeCanvas);
 
     return () => window.removeEventListener("resize", resizeCanvas);
-  }, []);
+  }, [resizeCanvas]);
 
   const updateElement = (
     id: string,
@@ -273,24 +357,31 @@ export function WhiteBoard() {
     const newElements = [...elements];
     newElements[index] = { ...updatedElement, id };
 
-    setElements(newElements);
+    setElements(newElements, true);
   };
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const [clientX, clientY] = [event.clientX, event.clientY];
     if (tool === "select") {
-      const element = getElementAtPosition(
-        clientX,
-        clientY,
-        elements
-      ) as Element;
+      const element = getElementAtPosition(clientX, clientY, elements);
 
       console.log("Element", element);
       if (element.selectedPosition) {
+        if (!element.x1 || !element.y1) return; // Safety check
+
         const offsetX = clientX - element.x1;
         const offsetY = clientY - element.y1;
+        setElements((prevState) => prevState);
 
-        setSelectedElement({ ...element, offsetX, offsetY });
+        const fullElement = elements.find((el) => el.id === element.id);
+        if (!fullElement) return;
+
+        setSelectedElement({
+          ...fullElement,
+          offsetX,
+          offsetY,
+          selectedPosition: element.selectedPosition,
+        });
         console.log("SelectedElement in PointerDown", element);
 
         if (element.selectedPosition === "inside") {
@@ -304,10 +395,10 @@ export function WhiteBoard() {
         const isInside = positionOnRectangle(
           clientX,
           clientY,
-          selectedElement!.x1 - 5,
-          selectedElement!.y1 - 5,
-          selectedElement!.x2 + 10,
-          selectedElement!.y2 + 10
+          selectedElement.x1 - 5,
+          selectedElement.y1 - 5,
+          selectedElement.x2 + 10,
+          selectedElement.y2 + 10
         );
 
         if (!isInside) {
@@ -315,16 +406,21 @@ export function WhiteBoard() {
           setAction("selecting");
         } else if (isInside === "inside") {
           console.log("Inside the Highlighted Zone", isInside);
-          const offsetX = clientX - selectedElement!.x1;
-          const offsetY = clientY - selectedElement!.y1;
+          const offsetX = clientX - selectedElement.x1;
+          const offsetY = clientY - selectedElement.y1;
           setSelectedElement({
             ...selectedElement,
             offsetX,
             offsetY,
-          } as Element);
+            selectedPosition: isInside,
+          });
+
+          setElements((prevState) => prevState);
+
           setAction("moving");
         } else {
           console.log("resizing", isInside);
+          setElements((prevState) => prevState);
           setSelectedElement({
             ...selectedElement,
             selectedPosition: isInside,
@@ -336,7 +432,7 @@ export function WhiteBoard() {
       setAction("drawing");
       setSelectedElement(null);
 
-      if (tool === "rectangle" || tool == "line") {
+      if (tool === "rectangle" || tool === "line") {
         const newElement = createElement(
           clientX,
           clientY,
@@ -345,33 +441,34 @@ export function WhiteBoard() {
           tool
         );
 
-        setElements([...elements, { ...newElement, id: crypto.randomUUID() }]);
+        setElements([...elements, newElement]);
       }
     }
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const [clientX, clientY] = [event.clientX, event.clientY];
-    if (action === "moving") {
+    if (action === "moving" && selectedElement) {
       // move element at clientX , clientY
       console.log("SelectedElement in PointerMove", selectedElement);
 
       const index = elements.findIndex((element) => {
-        return selectedElement?.id === element.id;
+        return selectedElement.id === element.id;
       });
 
-      const { x1, y1, x2, y2, offsetX, offsetY, type } =
-        selectedElement as Element;
+      if (index === -1) return;
+
+      const { x1, y1, x2, y2, offsetX, offsetY, type, id } = selectedElement;
       const width = x2 - x1;
       const height = y2 - y1;
 
       // new positions and size
-      const newX1 = clientX - (offsetX as number);
-      const newY1 = clientY - (offsetY as number);
+      const newX1 = clientX - (offsetX ?? 0);
+      const newY1 = clientY - (offsetY ?? 0);
       const newX2 = newX1 + width;
       const newY2 = newY1 + height;
-      const id = crypto.randomUUID();
-      updateElement(id, index, newX1, newY1, newX2, newY2, type as Shapes);
+
+      updateElement(id, index, newX1, newY1, newX2, newY2, type);
 
       const updatedElement = {
         ...selectedElement,
@@ -379,46 +476,49 @@ export function WhiteBoard() {
         y1: newY1,
         x2: newX2,
         y2: newY2,
-        id,
       };
-      setSelectedElement(updatedElement as Element);
+      setSelectedElement(updatedElement);
     }
 
     if (action === "drawing") {
       const lastIndex = elements.length - 1;
-      const { x1, y1 } = elements[lastIndex];
-      const id = crypto.randomUUID();
+      if (lastIndex < 0) return;
 
-      updateElement(id, lastIndex, x1, y1, clientX, clientY, tool as Shapes);
+      const { x1, y1, id, type } = elements[lastIndex];
+      updateElement(id, lastIndex, x1, y1, clientX, clientY, type);
     }
 
-    if (action === "resizing") {
+    if (action === "resizing" && selectedElement) {
       console.log("Resizing", selectedElement);
-      const { id, x1, y1, x2, y2, type, selectedPosition } =
-        selectedElement as Element;
+      const { id, x1, y1, x2, y2, type, selectedPosition } = selectedElement;
+
+      if (!selectedPosition) return;
+
       const index = elements.findIndex(
-        (element) => selectedElement?.id === element.id
+        (element) => selectedElement.id === element.id
       );
+
+      if (index === -1) return;
 
       switch (selectedPosition) {
         case "b":
           updateElement(id, index, x1, y1, x2, clientY, type);
-          setSelectedElement({ ...selectedElement, y2: clientY } as Element);
+          setSelectedElement({ ...selectedElement, y2: clientY });
           break;
 
         case "t":
           updateElement(id, index, x1, clientY, x2, y2, type);
-          setSelectedElement({ ...selectedElement, y1: clientY } as Element);
+          setSelectedElement({ ...selectedElement, y1: clientY });
           break;
 
         case "l":
           updateElement(id, index, clientX, y1, x2, y2, type);
-          setSelectedElement({ ...selectedElement, x1: clientX } as Element);
+          setSelectedElement({ ...selectedElement, x1: clientX });
           break;
 
         case "r":
           updateElement(id, index, x1, y1, clientX, y2, type);
-          setSelectedElement({ ...selectedElement, x2: clientX } as Element);
+          setSelectedElement({ ...selectedElement, x2: clientX });
           break;
 
         case "tl":
@@ -427,7 +527,7 @@ export function WhiteBoard() {
             ...selectedElement,
             x1: clientX,
             y1: clientY,
-          } as Element);
+          });
           break;
 
         case "tr":
@@ -436,7 +536,7 @@ export function WhiteBoard() {
             ...selectedElement,
             x2: clientX,
             y1: clientY,
-          } as Element);
+          });
           break;
 
         case "bl":
@@ -445,7 +545,7 @@ export function WhiteBoard() {
             ...selectedElement,
             x1: clientX,
             y2: clientY,
-          } as Element);
+          });
           break;
 
         case "br":
@@ -454,7 +554,7 @@ export function WhiteBoard() {
             ...selectedElement,
             x2: clientX,
             y2: clientY,
-          } as Element);
+          });
           break;
       }
     }
@@ -463,6 +563,8 @@ export function WhiteBoard() {
   const handlePointerUp = () => {
     if (action === "drawing") {
       const lastIndex = elements.length - 1;
+      if (lastIndex < 0) return;
+
       const { x1, y1, x2, y2, type, id } = elements[lastIndex];
       const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
         type,
@@ -472,7 +574,7 @@ export function WhiteBoard() {
         y2
       );
 
-      updateElement(id, lastIndex, newX1, newY1, newX2, newY2, type as Shapes);
+      updateElement(id, lastIndex, newX1, newY1, newX2, newY2, type);
     }
 
     setAction("none");
@@ -483,6 +585,12 @@ export function WhiteBoard() {
       <div className="fixed top-2 left-6">
         <ToolBar selectTool={selectTool}></ToolBar>
       </div>
+      <div className="fixed bottom-2 left-6">
+        <UndoRedo
+          undo={undo}
+          redo={redo}
+        ></UndoRedo>
+      </div>
       <canvas
         ref={boardRef}
         onPointerDown={handlePointerDown}
@@ -492,38 +600,3 @@ export function WhiteBoard() {
     </div>
   );
 }
-
-export type TOOL = "rectangle" | "line" | "move" | "select";
-export type Action = "drawing" | "selecting" | "moving" | "resizing" | "none";
-export type Element = {
-  type: Shapes;
-  id: string;
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  offsetX?: number;
-  offsetY?: number;
-  selectedPosition?: SelectedPosition;
-  drawnShape: Drawable;
-};
-
-export type Shapes = "rectangle" | "line";
-
-export type SelectedPosition =
-  | "inside"
-  | "tl"
-  | "tr"
-  | "bl"
-  | "br"
-  | "start"
-  | "end"
-  | "b"
-  | "t"
-  | "l"
-  | "r"
-  | null;
-export type Point = {
-  x: number;
-  y: number;
-};
