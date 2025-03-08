@@ -28,4 +28,5 @@ const BOARD_TOOLS = [
   { value: "select", label: "Select" },
   { value: "pencil", label: "Pencil" },
   { value: "text", label: "Text" },
+  { value: "pan", label: "Pan" },
 ];
