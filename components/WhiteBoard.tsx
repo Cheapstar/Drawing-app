@@ -14,8 +14,10 @@ import { UndoRedo } from "./UndoRedo";
 import getStroke from "perfect-freehand";
 import { RoughCanvas } from "roughjs/bin/canvas";
 import { ZoomButtons } from "./ZoomButtons";
-import { colorAtom } from "@/store/store";
+import { colorAtom, strokeWidthAtom } from "@/store/store";
 import { useAtom } from "jotai";
+import { ColorPicker } from "./ColorPicker";
+import { Menu } from "./Menu";
 
 // Define types first to avoid forward reference issues
 export type TOOL =
@@ -95,14 +97,29 @@ const createRectangle = (
   x1: number,
   y1: number,
   width: number,
-  height: number
+  height: number,
+  color: string,
+  strokeWidth: number
 ) => {
-  const roughElement = generator.rectangle(x1, y1, width, height);
+  const roughElement = generator.rectangle(x1, y1, width, height, {
+    stroke: color,
+    strokeWidth: strokeWidth / 8,
+  });
   return { x1, y1, x2: x1 + width, y2: y1 + height, drawnShape: roughElement };
 };
 
-const createLine = (x1: number, y1: number, x2: number, y2: number) => {
-  const roughElement = generator.line(x1, y1, x2, y2);
+const createLine = (
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  color: string,
+  strokeWidth: number
+) => {
+  const roughElement = generator.line(x1, y1, x2, y2, {
+    stroke: color,
+    strokeWidth: strokeWidth / 8,
+  });
   return { x1, y1, x2, y2, drawnShape: roughElement };
 };
 
@@ -267,9 +284,12 @@ const distance = (a: Point, b: Point): number => {
   return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
 };
 
-const createFreeHand = (points: number[][]) => {
+const createFreeHand = (points: number[][], strokeWidth: number) => {
   const path = new Path2D();
-  const outline = getStroke(points, DEFAULT_STROKE_OPTIONS);
+  const outline = getStroke(points, {
+    ...DEFAULT_STROKE_OPTIONS,
+    size: strokeWidth,
+  });
 
   if (outline.length < 2)
     return {
@@ -304,35 +324,49 @@ const createFreeHand = (points: number[][]) => {
   return { path, x1: minX, y1: minY, x2: maxX, y2: maxY };
 };
 
-const createElement = (
-  x1: number = 0,
-  y1: number = 0,
-  x2: number = 0,
-  y2: number = 0,
-  type: Shapes,
-  text?: string,
-  stroke?: number[][] | undefined
-): Element => {
+const createElement = ({
+  type,
+  x1,
+  y1,
+  x2,
+  y2,
+  color,
+  stroke,
+  text,
+  strokeWidth,
+}: Partial<Element>): Element => {
+  console.log("Color", color);
   switch (type) {
     case "rectangle":
       return {
-        ...createRectangle(x1, y1, x2 - x1, y2 - y1),
+        ...createRectangle(x1, y1, x2 - x1, y2 - y1, color, strokeWidth),
         type,
         id: crypto.randomUUID(),
+        color,
+        strokeWidth,
       };
     case "line":
       console.log("line Updating");
-      return { ...createLine(x1, y1, x2, y2), type, id: crypto.randomUUID() };
+
+      return {
+        ...createLine(x1, y1, x2, y2, color, strokeWidth),
+        type,
+        id: crypto.randomUUID(),
+        color,
+        strokeWidth,
+      };
     case "pencil":
       console.log("Here is the stroke", stroke);
       return {
-        ...createFreeHand(stroke as number[][]),
+        ...createFreeHand(stroke as number[][], strokeWidth as number),
         stroke,
         type,
         id: crypto.randomUUID(),
+        color,
+        strokeWidth,
       };
     case "text":
-      return { x1, y1, x2, y2, text, type, id: crypto.randomUUID() };
+      return { x1, y1, x2, y2, text, type, id: crypto.randomUUID(), color };
     default:
       throw new Error(`Unsupported shape type: ${type}`);
   }
@@ -421,11 +455,17 @@ const drawElement = (
       roughCanvas.draw(element.drawnShape as Drawable);
       break;
     case "pencil":
+      ctx.save();
+      ctx.fillStyle = element.color;
       ctx.fill(element.path as Path2D);
+      ctx.restore();
       break;
     case "text":
+      ctx.save();
       ctx.textBaseline = "top";
+      ctx.fillStyle = element.color;
       ctx.fillText(element.text as string, element.x1, element.y1 as number);
+      ctx.restore();
       break;
   }
 };
@@ -496,7 +536,8 @@ export function WhiteBoard() {
 
   const textElementRef = useRef<HTMLTextAreaElement>(null);
 
-  const [color, setColor] = useAtom(colorAtom);
+  const [color] = useAtom(colorAtom);
+  const [strokeWidth, setStrokeWidth] = useAtom(strokeWidthAtom);
 
   useEffect(() => {
     if (action === "writing" && textElementRef.current) {
@@ -594,25 +635,32 @@ export function WhiteBoard() {
   }, [resizeCanvas]);
 
   const updateElement = (
-    id: string,
     index: number,
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
-    type: Shapes,
-    text?: string,
-    stroke?: number[][] | undefined
-  ) => {
-    const updatedElement = createElement(
+    {
+      id,
+
       x1,
       y1,
       x2,
       y2,
       type,
-      text || "",
-      stroke
-    );
+      text,
+      stroke,
+      color,
+      strokeWidth,
+    }: Partial<Element>
+  ) => {
+    const updatedElement = createElement({
+      x1,
+      y1,
+      x2,
+      y2,
+      type,
+      text: text || "",
+      stroke,
+      color,
+      strokeWidth,
+    });
 
     const newElements = [...elements];
     newElements[index] = { ...updatedElement, id };
@@ -763,19 +811,28 @@ export function WhiteBoard() {
       setSelectedElement(null);
 
       if (tool === "rectangle" || tool === "line") {
-        const newElement = createElement(
-          clientX,
-          clientY,
-          clientX,
-          clientY,
-          tool
-        );
+        const newElement = createElement({
+          x1: clientX,
+          y1: clientY,
+          x2: clientX,
+          y2: clientY,
+          type: tool,
+          color,
+          strokeWidth,
+        });
 
         setElements([...elements, newElement]);
       } else if (tool === "pencil") {
-        const newElement = createElement(0, 0, 0, 0, "pencil", "", [
-          [clientX, clientY, event.pressure],
-        ]);
+        const newElement = createElement({
+          x1: 0,
+          y1: 0,
+          x2: 0,
+          y2: 0,
+          type: "pencil",
+          stroke: [[clientX, clientY, event.pressure]],
+          color,
+          strokeWidth,
+        });
         setElements([...elements, newElement]);
       }
     }
@@ -793,8 +850,19 @@ export function WhiteBoard() {
 
       if (index === -1) return;
 
-      const { x1, y1, x2, y2, offsetX, offsetY, type, id, stroke } =
-        selectedElement;
+      const {
+        x1,
+        y1,
+        x2,
+        y2,
+        offsetX,
+        offsetY,
+        type,
+        id,
+        stroke,
+        color: currentColor,
+        strokeWidth: SelectedStrokeWidth,
+      } = selectedElement;
       const width = x2 - x1;
       const height = y2 - y1;
 
@@ -811,17 +879,19 @@ export function WhiteBoard() {
             )
           : undefined;
 
-        const updatedElement = updateElement(
+        const updatedElement = updateElement(index, {
           id,
-          index,
-          0,
-          0,
-          0,
-          0,
-          "pencil",
-          "",
-          newStrokes
-        );
+
+          x1: 0,
+          y1: 0,
+          x2: 0,
+          y2: 0,
+          type: "pencil",
+          text: "",
+          stroke: newStrokes,
+          color: currentColor,
+          strokeWidth: SelectedStrokeWidth,
+        });
 
         setSelectedElement({
           ...selectedElement,
@@ -836,16 +906,17 @@ export function WhiteBoard() {
         const newY1 = clientY - ((offsetY as number[])[0] ?? 0);
         const newX2 = newX1 + width;
         const newY2 = newY1 + height;
-        updateElement(
+        updateElement(index, {
           id,
-          index,
-          newX1,
-          newY1,
-          newX2,
-          newY2,
+
+          x1: newX1,
+          y1: newY1,
+          x2: newX2,
+          y2: newY2,
           type,
-          selectedElement.text
-        );
+          text: selectedElement.text,
+          color: currentColor,
+        });
         const updatedElement = {
           ...selectedElement,
           x1: newX1,
@@ -860,7 +931,16 @@ export function WhiteBoard() {
         const newX2 = newX1 + width;
         const newY2 = newY1 + height;
 
-        updateElement(id, index, newX1, newY1, newX2, newY2, type);
+        updateElement(index, {
+          id,
+          x1: newX1,
+          y1: newY1,
+          x2: newX2,
+          y2: newY2,
+          type,
+          color: currentColor,
+          strokeWidth: SelectedStrokeWidth,
+        });
 
         const updatedElement = {
           ...selectedElement,
@@ -878,31 +958,66 @@ export function WhiteBoard() {
       if (lastIndex < 0) return;
 
       if (tool == "pencil") {
-        const { x1, y1, id, type, stroke } = elements[lastIndex];
+        const {
+          x1,
+          y1,
+          id,
+          type,
+          stroke,
+          color: currentColor,
+          strokeWidth: SelectedStrokeWidth,
+        } = elements[lastIndex];
         const newStroke = [
           ...(stroke as number[][]),
           [clientX, clientY, event.pressure],
         ];
-        updateElement(
+        updateElement(lastIndex, {
           id,
-          lastIndex,
           x1,
           y1,
-          clientX,
-          clientY,
+          x2: clientX,
+          y2: clientY,
           type,
-          "",
-          newStroke
-        );
+          text: "",
+          stroke: newStroke,
+          color: currentColor,
+          strokeWidth: SelectedStrokeWidth,
+        });
       } else if (tool === "rectangle" || tool === "line") {
-        const { x1, y1, id, type } = elements[lastIndex];
-        updateElement(id, lastIndex, x1, y1, clientX, clientY, type);
+        const {
+          x1,
+          y1,
+          id,
+          type,
+          color: currentColor,
+          strokeWidth: SelectedStrokeWidth,
+        } = elements[lastIndex];
+        updateElement(lastIndex, {
+          id,
+          x1,
+          y1,
+          x2: clientX,
+          y2: clientY,
+          type,
+          color: currentColor,
+          strokeWidth: SelectedStrokeWidth,
+        });
       }
     }
 
     if (action === "resizing" && selectedElement) {
       console.log("Resizing", selectedElement);
-      const { id, x1, y1, x2, y2, type, selectedPosition } = selectedElement;
+      const {
+        id,
+        x1,
+        y1,
+        x2,
+        y2,
+        type,
+        selectedPosition,
+        color: currentColor,
+        strokeWidth: SelectedStrokeWidth,
+      } = selectedElement;
 
       if (!selectedPosition) return;
 
@@ -916,28 +1031,73 @@ export function WhiteBoard() {
 
       switch (selectedPosition) {
         case "b":
-          updateElement(id, index, x1, y1, x2, clientY, type);
+          updateElement(index, {
+            id,
+            x1: x1,
+            y1: y1,
+            x2: x2,
+            y2: clientY,
+            type,
+            color: currentColor,
+            strokeWidth: SelectedStrokeWidth,
+          });
           setSelectedElement({ ...selectedElement, y2: clientY });
           break;
 
         case "t":
-          updateElement(id, index, x1, clientY, x2, y2, type);
+          updateElement(index, {
+            id,
+            x1: x1,
+            y1: clientY,
+            x2: x2,
+            y2: y2,
+            type,
+            color: currentColor,
+            strokeWidth: SelectedStrokeWidth,
+          });
           setSelectedElement({ ...selectedElement, y1: clientY });
           break;
 
         case "l":
-          updateElement(id, index, clientX, y1, x2, y2, type);
+          updateElement(index, {
+            id,
+            x1: clientX,
+            y1: y1,
+            x2: x2,
+            y2: y2,
+            type,
+            color: currentColor,
+            strokeWidth: SelectedStrokeWidth,
+          });
           setSelectedElement({ ...selectedElement, x1: clientX });
           break;
 
         case "r":
-          updateElement(id, index, x1, y1, clientX, y2, type);
+          updateElement(index, {
+            id,
+            x1: x1,
+            y1: y1,
+            x2: clientX,
+            y2: y2,
+            type,
+            color: currentColor,
+            strokeWidth: SelectedStrokeWidth,
+          });
           setSelectedElement({ ...selectedElement, x2: clientX });
           break;
 
         case "start":
         case "tl":
-          updateElement(id, index, clientX, clientY, x2, y2, type);
+          updateElement(index, {
+            id,
+            x1: clientX,
+            y1: clientY,
+            x2: x2,
+            y2: y2,
+            type,
+            color: currentColor,
+            strokeWidth: SelectedStrokeWidth,
+          });
           setSelectedElement({
             ...selectedElement,
             x1: clientX,
@@ -946,7 +1106,16 @@ export function WhiteBoard() {
           break;
 
         case "tr":
-          updateElement(id, index, x1, clientY, clientX, y2, type);
+          updateElement(index, {
+            id,
+            x1: x1,
+            y1: clientY,
+            x2: clientX,
+            y2: y2,
+            type,
+            color: currentColor,
+            strokeWidth: SelectedStrokeWidth,
+          });
           setSelectedElement({
             ...selectedElement,
             x2: clientX,
@@ -955,7 +1124,16 @@ export function WhiteBoard() {
           break;
 
         case "bl":
-          updateElement(id, index, clientX, y1, x2, clientY, type);
+          updateElement(index, {
+            id,
+            x1: clientX,
+            y1: y1,
+            x2: x2,
+            y2: clientY,
+            type,
+            color: currentColor,
+            strokeWidth: SelectedStrokeWidth,
+          });
           setSelectedElement({
             ...selectedElement,
             x1: clientX,
@@ -965,7 +1143,16 @@ export function WhiteBoard() {
 
         case "end":
         case "br":
-          updateElement(id, index, x1, y1, clientX, clientY, type);
+          updateElement(index, {
+            id,
+            x1: x1,
+            y1: y1,
+            x2: clientX,
+            y2: clientY,
+            type,
+            color: currentColor,
+            strokeWidth: SelectedStrokeWidth,
+          });
           setSelectedElement({
             ...selectedElement,
             x2: clientX,
@@ -982,7 +1169,16 @@ export function WhiteBoard() {
         y2
       );
 
-      updateElement(id, index, newX1, newY1, newX2, newY2, type);
+      updateElement(index, {
+        id,
+        x1: newX1,
+        y1: newY1,
+        x2: newX2,
+        y2: newY2,
+        type,
+        color: currentColor,
+        strokeWidth: SelectedStrokeWidth,
+      });
     }
 
     if (action === "panning") {
@@ -1009,7 +1205,15 @@ export function WhiteBoard() {
 
       if (tool === "pencil") {
       } else {
-        const { x1, y1, x2, y2, type, id } = elements[lastIndex];
+        const {
+          x1,
+          y1,
+          x2,
+          y2,
+          type,
+          id,
+          color: currentColor,
+        } = elements[lastIndex];
         const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
           type,
           x1,
@@ -1018,7 +1222,16 @@ export function WhiteBoard() {
           y2
         );
 
-        updateElement(id, lastIndex, newX1, newY1, newX2, newY2, type);
+        updateElement(lastIndex, {
+          id,
+          x1: newX1,
+          y1: newY1,
+          x2: newX2,
+          y2: newY2,
+          type,
+          color: currentColor,
+          strokeWidth,
+        });
       }
     }
     setAction("none");
@@ -1062,6 +1275,9 @@ export function WhiteBoard() {
           onZoom={onZoom}
         ></ZoomButtons>
       </div>
+      <div className="fixed top-28 left-5 p-4 rounded-md shadow-lg bg-white">
+        <Menu></Menu>
+      </div>
 
       {action === "writing" && (
         <textarea
@@ -1079,6 +1295,7 @@ export function WhiteBoard() {
         ref={boardRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        className="bg-white"
       ></canvas>
     </div>
   );
