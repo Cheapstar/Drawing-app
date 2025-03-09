@@ -80,6 +80,7 @@ export type Element = {
   fontFamily?: string;
   strokeWidth?: number;
   opacity?: number;
+  status?: string;
 };
 
 const generator = rough.generator();
@@ -193,10 +194,8 @@ const nearPoint = (x1: number, y1: number, x2: number, y2: number): boolean => {
 
 const point = (x: number, y: number): Point => ({ x, y });
 
-const positionOnPencil = (client: Point, stroke: number[][]) => {
-  console.log("Checking Pencil");
-  console.log("Position Stroke", stroke);
-  if (!stroke) return null;
+const positionOnPencil = (client: Point, stroke?: number[][]) => {
+  if (!stroke || stroke.length < 2) return null;
   let a = stroke[0];
 
   for (let i = 1; i < stroke.length; i++) {
@@ -466,6 +465,9 @@ const drawElement = (
     case "pencil":
       ctx.save();
       ctx.fillStyle = element.color;
+      if (element.opacity) {
+        ctx.globalAlpha = element.opacity;
+      }
       ctx.fill(element.path as Path2D);
       ctx.restore();
       break;
@@ -474,6 +476,9 @@ const drawElement = (
       ctx.textBaseline = "top";
       ctx.fillStyle = element.color as string;
       console.log("FontSize", element.fontSize);
+      if (element.opacity) {
+        ctx.globalAlpha = element.opacity;
+      }
       ctx.font = `${element.fontSize}px ${element.fontFamily}`;
       ctx.fillText(element.text as string, element.x1, element.y1 as number);
       ctx.restore();
@@ -522,6 +527,10 @@ export function WhiteBoard() {
 
   const [color] = useAtom(colorAtom);
   const [strokeWidth] = useAtom(strokeWidthAtom);
+
+  const [eraseElements, setEraseElements] = useState<
+    Element[] | Partial<Element>[]
+  >([]);
 
   useEffect(() => {
     if (action === "writing" && textElementRef.current) {
@@ -627,6 +636,7 @@ export function WhiteBoard() {
       strokeWidth,
       fontSize,
       fontFamily,
+      opacity,
     }: Partial<Element>
   ) => {
     const updatedElement = createElement({
@@ -640,6 +650,7 @@ export function WhiteBoard() {
       color,
       strokeWidth,
     });
+    if (!updatedElement) return;
 
     const newElements = [...elements];
     newElements[index] = {
@@ -647,6 +658,7 @@ export function WhiteBoard() {
       id,
       fontSize: fontSize || 0,
       fontFamily: fontFamily || "",
+      opacity,
     };
 
     setElements(newElements, true);
@@ -668,6 +680,30 @@ export function WhiteBoard() {
 
     if (action === "writing") {
       return;
+    }
+
+    if (tool === "eraser") {
+      const element = getElementAtPosition(clientX, clientY, elements);
+
+      setAction("erasing");
+      if (element.id && element.selectedPosition) {
+        const index = elements.findIndex(({ id }) => id === element.id);
+
+        if (index !== -1) {
+          // Add to eraseElements if not already there
+          if (!eraseElements.some((e) => e.id === element.id)) {
+            setEraseElements([...eraseElements, element]);
+
+            // Update opacity to show it's being erased
+            const updatedElements = [...elements];
+            updatedElements[index] = {
+              ...updatedElements[index],
+              opacity: 0.5,
+            };
+            updateElement(index, { ...element, opacity: 0.5 });
+          }
+        }
+      }
     }
 
     if (tool === "pan") {
@@ -842,8 +878,10 @@ export function WhiteBoard() {
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const { x: clientX, y: clientY } = getMouseCoordinates(event);
-    if (action === "moving" && selectedElement) {
+    if (action === "moving") {
       // move element at clientX , clientY
+      if (!selectedElement || !selectedElement.id) return;
+
       console.log("SelectedElement in PointerMove", selectedElement);
 
       const index = elements.findIndex((element) => {
@@ -873,6 +911,12 @@ export function WhiteBoard() {
       // new positions and size
 
       if (selectedElement.type === "pencil") {
+        if (
+          !selectedElement.stroke ||
+          !selectedElement.offsetX ||
+          !selectedElement.offsetY
+        )
+          return;
         const newStrokes = stroke
           ? updateEachStroke(
               stroke,
@@ -964,16 +1008,19 @@ export function WhiteBoard() {
       const lastIndex = elements.length - 1;
       if (lastIndex < 0) return;
 
+      const currentElement = elements[lastIndex];
+      if (!currentElement) return;
+
+      const {
+        x1,
+        y1,
+        id,
+        type,
+        stroke,
+        color: currentColor,
+        strokeWidth: SelectedStrokeWidth,
+      } = currentElement;
       if (tool == "pencil") {
-        const {
-          x1,
-          y1,
-          id,
-          type,
-          stroke,
-          color: currentColor,
-          strokeWidth: SelectedStrokeWidth,
-        } = elements[lastIndex];
         const newStroke = [
           ...(stroke as number[][]),
           [clientX, clientY, event.pressure],
@@ -991,14 +1038,6 @@ export function WhiteBoard() {
           strokeWidth: SelectedStrokeWidth,
         });
       } else if (tool === "rectangle" || tool === "line") {
-        const {
-          x1,
-          y1,
-          id,
-          type,
-          color: currentColor,
-          strokeWidth: SelectedStrokeWidth,
-        } = elements[lastIndex];
         updateElement(lastIndex, {
           id,
           x1,
@@ -1169,10 +1208,38 @@ export function WhiteBoard() {
       }));
       return;
     }
+
+    if (action === "erasing") {
+      const element = getElementAtPosition(clientX, clientY, elements);
+
+      if (element.selectedPosition) {
+        const index = elements.findIndex(({ id }) => {
+          return id === element.id;
+        });
+        setEraseElements([...eraseElements, element]);
+        updateElement(index, { ...element, opacity: 0.5 });
+        return;
+      } else {
+        return;
+      }
+    }
   };
 
   const handlePointerUp = () => {
     console.log("Action is ", action);
+    if (action === "erasing") {
+      if (eraseElements.length === 0) return;
+
+      const newElements = elements.filter(
+        (element) =>
+          !eraseElements.some((eraseElement) => eraseElement.id === element.id)
+      );
+
+      setElements(newElements);
+      setEraseElements([]);
+      setSelectedElement(null);
+    }
+
     if (action === "writing") {
       console.log("Now it should focus");
       return;
@@ -1244,6 +1311,12 @@ export function WhiteBoard() {
     }
     setScale((prevState) => Math.min(Math.max(prevState + delta, 0.1), 2));
   };
+  const getCursorForTool = () => {
+    if (action === "moving") return "move";
+    if (action === "resizing") return "nwse-resize";
+    if (action === "panning") return "grabbing";
+    return TOOLS[tool]?.cursor || "default";
+  };
 
   return (
     <div onPointerUp={handlePointerUp}>
@@ -1310,15 +1383,20 @@ export function WhiteBoard() {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         className="bg-white"
+        style={{ cursor: getCursorForTool() }}
       ></canvas>
     </div>
   );
 }
 
-const TOOLS = {
-  pen: {
-    cursor: "crosshair",
-  },
+const TOOLS: Record<TOOL, { cursor: string }> = {
+  rectangle: { cursor: "crosshair" },
+  line: { cursor: "crosshair" },
+  move: { cursor: "move" },
+  select: { cursor: "default" },
+  pencil: { cursor: "crosshair" },
+  text: { cursor: "text" },
+  pan: { cursor: "grab" },
   eraser: {
     cursor: `url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAANlJREFUOE9jZKAyYKSyeQzDw0AfBgYGPWjQXGJgYNiCL5jwedmHj49vtrq6OoejoyMvyJD9+/d/vnnz5o9Pnz6l4jIYl4E+7Ozsa1evXs3m6+uL4qDNmzczhIaG/vr582cwNkOxGsjHx/d8yZIlEuiGwUwGGRoTE/Pi06dPkujex2agj6mp6eJTp04J4AsrMzOzD6dPn45FdyU2A6vKysqaOjs7mfEZWF5e/rerq6uOgYGhDVkdXQykupcZqB0poCChbrKBBjJVEzZyxFEt65FVsg2P4oskrwMAC4ZwFWmZPgcAAAAASUVORK5CYII="), auto`,
   },
