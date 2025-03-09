@@ -19,6 +19,7 @@ import {
   fontFamilyAtom,
   fontSizeAtom,
   strokeWidthAtom,
+  toolAtom,
 } from "@/store/store";
 import { useAtom } from "jotai";
 import { Menu } from "./Menu";
@@ -144,8 +145,8 @@ const getElementAtPosition = (
       clientY,
       x1,
       y1,
-      x2,
-      y2,
+      x2 as number,
+      y2 as number,
       type,
       stroke
     );
@@ -347,7 +348,14 @@ const createElement = ({
   switch (type) {
     case "rectangle":
       return {
-        ...createRectangle(x1, y1, x2 - x1, y2 - y1, color, strokeWidth),
+        ...createRectangle(
+          x1 as number,
+          y1 as number,
+          (x2 as number) - (x1 as number),
+          (y2 as number) - (y1 as number),
+          color as string,
+          strokeWidth as number
+        ),
         type,
         id: crypto.randomUUID(),
         color,
@@ -357,7 +365,14 @@ const createElement = ({
       console.log("line Updating");
 
       return {
-        ...createLine(x1, y1, x2, y2, color, strokeWidth),
+        ...createLine(
+          x1 as number,
+          y1 as number,
+          x2 as number,
+          y2 as number,
+          color as string,
+          strokeWidth as number
+        ),
         type,
         id: crypto.randomUUID(),
         color,
@@ -374,7 +389,16 @@ const createElement = ({
         strokeWidth,
       };
     case "text":
-      return { x1, y1, x2, y2, text, type, id: crypto.randomUUID(), color };
+      return {
+        x1: x1 as number,
+        y1: y1 as number,
+        x2,
+        y2,
+        text,
+        type,
+        id: crypto.randomUUID(),
+        color,
+      };
     default:
       throw new Error(`Unsupported shape type: ${type}`);
   }
@@ -464,7 +488,7 @@ const drawElement = (
       break;
     case "pencil":
       ctx.save();
-      ctx.fillStyle = element.color;
+      ctx.fillStyle = element.color as string;
       if (element.opacity) {
         ctx.globalAlpha = element.opacity;
       }
@@ -474,6 +498,7 @@ const drawElement = (
     case "text":
       ctx.save();
       ctx.textBaseline = "top";
+      ctx.textRendering = "geometricPrecision";
       ctx.fillStyle = element.color as string;
       console.log("FontSize", element.fontSize);
       if (element.opacity) {
@@ -509,7 +534,7 @@ export function WhiteBoard() {
 
   const boardRef = useRef<HTMLCanvasElement>(null);
 
-  const [tool, setTool] = useState<TOOL>("select");
+  const [tool, setTool] = useAtom(toolAtom);
 
   const [action, setAction] = useState<Action>("none");
 
@@ -522,8 +547,8 @@ export function WhiteBoard() {
   const [scaleOffset, setScaleOffset] = useState<Point>({ x: 0, y: 0 });
 
   const textElementRef = useRef<HTMLTextAreaElement>(null);
-  const [fontSize, setFontSize] = useAtom(fontSizeAtom);
-  const [fontFamily, setFontFamily] = useAtom(fontFamilyAtom);
+  const [fontSize] = useAtom(fontSizeAtom);
+  const [fontFamily] = useAtom(fontFamilyAtom);
 
   const [color] = useAtom(colorAtom);
   const [strokeWidth] = useAtom(strokeWidthAtom);
@@ -542,14 +567,18 @@ export function WhiteBoard() {
       }, 0);
     }
   }, [action, textElementRef]);
-
   const resizeCanvas = useCallback(() => {
     if (!boardRef.current) return;
 
-    boardRef.current.width = window.innerWidth;
-    boardRef.current.height = window.innerHeight;
-    boardRef.current.style.width = window.innerWidth + "px";
-    boardRef.current.style.height = window.innerHeight + "px";
+    const dpr = window.devicePixelRatio || 1;
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    boardRef.current.width = width * dpr;
+    boardRef.current.height = height * dpr;
+    boardRef.current.style.width = width + "px";
+    boardRef.current.style.height = height + "px";
   }, []);
 
   useEffect(() => {
@@ -575,19 +604,24 @@ export function WhiteBoard() {
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
+    const dpr = window.devicePixelRatio || 1;
     const rc = rough.canvas(canvas);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = false;
 
-    const scaledWidth = canvas.width * scale;
-    const scaledHeight = canvas.height * scale;
+    const scaledWidth = (canvas.width * scale) / dpr;
+    const scaledHeight = (canvas.height * scale) / dpr;
 
-    const scaleOffsetX = (scaledWidth - canvas.width) / 2;
-    const scaleOffsetY = (scaledHeight - canvas.height) / 2;
+    const scaleOffsetX = (scaledWidth - canvas.width / dpr) / 2;
+    const scaleOffsetY = (scaledHeight - canvas.height / dpr) / 2;
 
     setScaleOffset({ x: scaleOffsetX, y: scaleOffsetY });
 
     ctx.save();
+
+    // Scale for high DPR displays first
+    ctx.scale(dpr, dpr);
 
     ctx.translate(
       panOffset.x * scale - scaleOffsetX,
@@ -599,10 +633,12 @@ export function WhiteBoard() {
     });
 
     if (selectedElement) {
-      const x1 = Math.min(selectedElement.x1, selectedElement.x2) - 5;
-      const y1 = Math.min(selectedElement.y1, selectedElement.y2) - 5;
-      const width = Math.abs(selectedElement.x2 - selectedElement.x1) + 10;
-      const height = Math.abs(selectedElement.y2 - selectedElement.y1) + 10;
+      const x1 = Math.min(selectedElement.x1, selectedElement.x2 as number) - 5;
+      const y1 = Math.min(selectedElement.y1, selectedElement.y2 as number) - 5;
+      const width =
+        Math.abs((selectedElement.x2 as number) - selectedElement.x1) + 10;
+      const height =
+        Math.abs((selectedElement.y2 as number) - selectedElement.y1) + 10;
 
       ctx.save();
       ctx.strokeStyle = "#6965db";
@@ -615,6 +651,7 @@ export function WhiteBoard() {
 
   useEffect(() => {
     resizeCanvas();
+
     window.addEventListener("resize", resizeCanvas);
 
     return () => window.removeEventListener("resize", resizeCanvas);
@@ -655,7 +692,7 @@ export function WhiteBoard() {
     const newElements = [...elements];
     newElements[index] = {
       ...updatedElement,
-      id,
+      id: id as string,
       fontSize: fontSize || 0,
       fontFamily: fontFamily || "",
       opacity,
@@ -764,8 +801,8 @@ export function WhiteBoard() {
           clientY,
           selectedElement.x1 - 5,
           selectedElement.y1 - 5,
-          selectedElement.x2 + 10,
-          selectedElement.y2 + 10
+          (selectedElement.x2 as number) + 10,
+          (selectedElement.y2 as number) + 10
         );
 
         if (!isInside) {
@@ -905,8 +942,8 @@ export function WhiteBoard() {
         fontSize: SelectedFontSize,
         fontFamily: SelectedFontFamily,
       } = selectedElement;
-      const width = x2 - x1;
-      const height = y2 - y1;
+      const width = (x2 as number) - x1;
+      const height = (y2 as number) - y1;
 
       // new positions and size
 
@@ -939,7 +976,7 @@ export function WhiteBoard() {
           stroke: newStrokes,
           color: currentColor,
           strokeWidth: SelectedStrokeWidth,
-        });
+        }) as Element;
 
         setSelectedElement({
           ...selectedElement,
@@ -1062,12 +1099,11 @@ export function WhiteBoard() {
         y2,
         type,
         selectedPosition,
-        offsetX,
-        offsetY,
+
         color: currentColor,
         stroke,
         strokeWidth: SelectedStrokeWidth,
-      } = selectedElement;
+      }: Element = selectedElement;
 
       if (!selectedPosition) return;
 
@@ -1079,8 +1115,8 @@ export function WhiteBoard() {
       console.log("Selected position", selectedPosition);
       let updatedStrokes = type === "pencil" ? [...(stroke as number[][])] : [];
 
-      const width = x2 - x1;
-      const height = y2 - y1;
+      const width = (x2 as number) - x1;
+      const height = (y2 as number) - y1;
 
       function scaleStroke(
         stroke: number[][],
@@ -1112,14 +1148,14 @@ export function WhiteBoard() {
           break;
 
         case "t":
-          scaleY = height !== 0 ? (y2 - clientY) / height : 1;
-          referenceY = y2;
+          scaleY = height !== 0 ? ((y2 as number) - clientY) / height : 1;
+          referenceY = y2 as number;
           newY1 = clientY;
           break;
 
         case "l":
-          scaleX = width !== 0 ? (x2 - clientX) / width : 1;
-          referenceX = x2;
+          scaleX = width !== 0 ? ((x2 as number) - clientX) / width : 1;
+          referenceX = x2 as number;
           newX1 = clientX;
           break;
 
@@ -1130,27 +1166,27 @@ export function WhiteBoard() {
           break;
         case "start":
         case "tl":
-          scaleX = width !== 0 ? (x2 - clientX) / width : 1;
-          scaleY = height !== 0 ? (y2 - clientY) / height : 1;
-          referenceX = x2;
-          referenceY = y2;
+          scaleX = width !== 0 ? ((x2 as number) - clientX) / width : 1;
+          scaleY = height !== 0 ? ((y2 as number) - clientY) / height : 1;
+          referenceX = x2 as number;
+          referenceY = y2 as number;
           newX1 = clientX;
           newY1 = clientY;
           break;
 
         case "tr":
           scaleX = width !== 0 ? (clientX - x1) / width : 1;
-          scaleY = height !== 0 ? (y2 - clientY) / height : 1;
+          scaleY = height !== 0 ? ((y2 as number) - clientY) / height : 1;
           referenceX = x1;
-          referenceY = y2;
+          referenceY = y2 as number;
           newX2 = clientX;
           newY1 = clientY;
           break;
 
         case "bl":
-          scaleX = width !== 0 ? (x2 - clientX) / width : 1;
+          scaleX = width !== 0 ? ((x2 as number) - clientX) / width : 1;
           scaleY = height !== 0 ? (clientY - y1) / height : 1;
-          referenceX = x2;
+          referenceX = x2 as number;
           referenceY = y1;
           newX1 = clientX;
           newY2 = clientY;
@@ -1264,8 +1300,8 @@ export function WhiteBoard() {
           type,
           x1,
           y1,
-          x2,
-          y2
+          x2 as number,
+          y2 as number
         );
 
         updateElement(lastIndex, {
@@ -1285,19 +1321,23 @@ export function WhiteBoard() {
 
   const handleBlur = () => {
     const ctx = boardRef.current?.getContext("2d");
-    ctx?.save();
-    ctx.font = `${fontSize}px ${fontFamily}`;
-    const text = ctx?.measureText(textElementRef.current?.value as string);
-    const height = fontSize;
-    const updatedSelectedElement = {
-      ...selectedElement,
-      text: textElementRef.current?.value,
-      x2: selectedElement.x1 + text?.width,
-      y2: selectedElement.y1 + height,
-    };
-    console.log("SelectedElement", updatedSelectedElement);
+    if (selectedElement && ctx) {
+      ctx?.save();
+      ctx.font = `${fontSize}px ${fontFamily}`;
+      const text = ctx?.measureText(
+        textElementRef.current?.value as string
+      ) as TextMetrics;
+      const height = fontSize;
+      const updatedSelectedElement = {
+        ...selectedElement,
+        text: textElementRef.current?.value,
+        x2: (selectedElement.x1 + text.width) as number,
+        y2: selectedElement.y1 + height,
+      };
+      console.log("SelectedElement", updatedSelectedElement);
 
-    setElements([...elements, updatedSelectedElement]);
+      setElements([...elements, updatedSelectedElement]);
+    }
     ctx?.restore();
     setSelectedElement(null);
     setTool("select");
@@ -1319,9 +1359,12 @@ export function WhiteBoard() {
   };
 
   return (
-    <div onPointerUp={handlePointerUp}>
+    <div
+      onPointerUp={handlePointerUp}
+      className="relative z-0"
+    >
       <div
-        className="fixed top-2 left-6"
+        className="fixed top-4 left-1/2 -translate-x-1/2"
         style={{
           cursor: action === "drawing" ? "not-allowed" : "default",
           pointerEvents: action === "drawing" ? "none" : "auto",
@@ -1369,11 +1412,19 @@ export function WhiteBoard() {
           ref={textElementRef}
           className="fixed focus:outline-none resize-none"
           style={{
-            top: selectedElement?.y1 + panOffset.y - 10,
-            left: selectedElement?.x1 + panOffset.x,
+            top:
+              (selectedElement?.y1 as number) * scale +
+              panOffset.y * scale -
+              scaleOffset.y -
+              10 * scale,
+            left:
+              (selectedElement?.x1 as number) * scale +
+              panOffset.x * scale -
+              scaleOffset.x,
             fontFamily: fontFamily,
             color: color,
-            fontSize: fontSize,
+            fontSize: fontSize * scale,
+            transformOrigin: "top left",
           }}
           onFocus={() => console.log("Textarea focused")}
         ></textarea>
@@ -1382,7 +1433,7 @@ export function WhiteBoard() {
         ref={boardRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        className="bg-white"
+        className="bg-white -z-10"
         style={{ cursor: getCursorForTool() }}
       ></canvas>
     </div>

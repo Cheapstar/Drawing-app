@@ -12,6 +12,7 @@ export function TextOptions() {
     "Helvetica",
     "Comic Sans MS",
     "Impact",
+    "virgilFont",
   ];
 
   const [fontSize, setFontSize] = useAtom(fontSizeAtom);
