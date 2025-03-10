@@ -2,7 +2,11 @@
 import { fontSizeAtom, fontFamilyAtom } from "@/store/store";
 import { useAtom } from "jotai";
 
-export function TextOptions() {
+interface TextProps{
+  darkMode : boolean
+}
+
+export function TextOptions({darkMode} : TextProps) {
   const fontFamilies = [
     "Arial",
     "Times New Roman",
@@ -29,7 +33,7 @@ export function TextOptions() {
   return (
     <div className="flex flex-col gap-3">
       <div className="mb-2">
-        <label className="block text-xs text-gray-600 mb-1">Font Size</label>
+        <label className={`block text-xs  ${darkMode ? "text-gray-300" : "text-gray-600"} mb-1`}>Font Size</label>
         <div className="flex items-center gap-2.5 pt-2">
           {FONT_SIZE_SVG.map(({ label, size, svg }) => {
             return (
@@ -38,11 +42,17 @@ export function TextOptions() {
                 onClick={() => onFontSizeChange(size as number)}
               >
                 <button
-                  className={`p-2 rounded-md hover:bg-[#f2f2fa] flex justify-center items-center transition-all   ${
-                    fontSize === size
+                  className={`p-2 rounded-md flex justify-center items-center transition-all 
+                  ${
+                    darkMode
+                      ? fontSize === size
+                        ? "ring-2 ring-[#403E6A] ring-offset-1 bg-[#393950] hover:bg-[#403E6A]"
+                        : "hover:ring-1 hover:ring-[#403E6A] bg-[#393950] hover:bg-[#403E6A]"
+                      : fontSize === size
                       ? "ring-2 ring-blue-500 ring-offset-1 bg-[#CCCCFF] hover:bg-[#CCCCFF]"
                       : "hover:ring-1 hover:ring-gray-300 bg-gray-200 hover:bg-[#f2f2fa]"
                   }`}
+               
                 >
                   {svg}
                 </button>
@@ -53,11 +63,11 @@ export function TextOptions() {
       </div>
 
       <div className="">
-        <label className="block text-xs text-gray-600 mb-1">Font Family</label>
+        <label className={`block text-xs  ${darkMode ? "text-gray-300" : "text-gray-600"} mb-1`}>Font Family</label>
         <select
           value={fontFamily}
           onChange={(e) => onFontFamilyChange(e.target.value)}
-          className="w-full text-sm p-1 border rounded"
+          className={`w-full text-sm p-1 border rounded ${darkMode ? "bg-[#232329] text-white" : "bg-white text-black"}`}
         >
           {fontFamilies.map((family) => (
             <option

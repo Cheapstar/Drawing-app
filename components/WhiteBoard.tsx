@@ -1,4 +1,6 @@
 "use client";
+import { MdDarkMode } from "react-icons/md";
+
 
 import React, {
   useCallback,
@@ -1358,19 +1360,28 @@ export function WhiteBoard() {
     return TOOLS[tool]?.cursor || "default";
   };
 
+  const [darkMode, setDarkMode] = useState(true);
+
+  const handleDark = () => {
+    setDarkMode(!darkMode); 
+  };
+
   return (
     <div
       onPointerUp={handlePointerUp}
       className="relative z-0"
     >
       <div
-        className="fixed top-4 left-1/2 -translate-x-1/2"
+        className="fixed flex top-4 left-1/2 -translate-x-1/2 items-center gap-2"
         style={{
           cursor: action === "drawing" ? "not-allowed" : "default",
           pointerEvents: action === "drawing" ? "none" : "auto",
         }}
       >
-        <ToolBar selectTool={selectTool}></ToolBar>
+        <ToolBar darkMode={darkMode} selectTool={selectTool}></ToolBar>
+        <button onClick={handleDark} className={` ${darkMode ? "bg-[#232329] text-white" : "bg-white text-black"} shadow-md rounded-lg p-4 flex gap-1 border border-gray-300`}>  
+            <MdDarkMode className="text-2xl"/>
+        </button>
       </div>
       <div
         className="fixed bottom-5 left-6"
@@ -1380,6 +1391,7 @@ export function WhiteBoard() {
         }}
       >
         <UndoRedo
+          darkMode={darkMode}
           undo={undo}
           redo={redo}
         ></UndoRedo>
@@ -1392,18 +1404,19 @@ export function WhiteBoard() {
         }}
       >
         <ZoomButtons
+          darkMode={darkMode}
           scale={scale}
           onZoom={onZoom}
         ></ZoomButtons>
       </div>
       <div
-        className="fixed top-28 left-5 p-4 rounded-md shadow-lg bg-white"
+        className={`fixed top-28 left-5 p-4 rounded-md shadow-lg ${darkMode ? "bg-[#232329] text-white" : "bg-white text-black"}`}
         style={{
           cursor: action === "drawing" ? "not-allowed" : "default",
           pointerEvents: action === "drawing" ? "none" : "auto",
         }}
       >
-        <Menu></Menu>
+        <Menu darkMode={darkMode}></Menu>
       </div>
 
       {action === "writing" && (
@@ -1433,7 +1446,7 @@ export function WhiteBoard() {
         ref={boardRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        className="bg-white -z-10"
+        className={`${darkMode? "bg-black" : "bg-white"} -z-10`}
         style={{ cursor: getCursorForTool() }}
       ></canvas>
     </div>

@@ -4,11 +4,16 @@ import { TOOL } from "./WhiteBoard";
 import { toolAtom } from "@/store/store";
 import { useAtom } from "jotai";
 
-export function ToolBar({ selectTool }: { selectTool: (tool: TOOL) => void }) {
+interface ToolBarProps {
+  selectTool: (tool: TOOL) => void;
+  darkMode: boolean;
+}
+
+export function ToolBar({ selectTool, darkMode }: ToolBarProps) {
   const [activeTool, setActiveTool] = useAtom(toolAtom);
 
   return (
-    <nav className=" bg-white shadow-md rounded-lg p-2 flex gap-1 border border-gray-300">
+    <nav className={`${darkMode ? "bg-[#232329] text-white" : "bg-white text-black"} shadow-md rounded-lg p-2 flex gap-1 border border-gray-300`}>
       {BOARD_TOOLS.map(({ value, label, svg }) => (
         <button
           key={value}
@@ -17,8 +22,13 @@ export function ToolBar({ selectTool }: { selectTool: (tool: TOOL) => void }) {
             selectTool(value as TOOL);
           }}
           className={`w-10 h-10 flex items-center justify-center rounded-md transition-colors ${
-            activeTool === value ? "bg-gray-300" : "hover:bg-gray-200"
+            activeTool === value
+              ? darkMode
+                ? "bg-[#403E6A] hover:bg-[#393950]"
+                : "bg-gray-300 hover:bg-gray-200"
+              : ""
           }`}
+          
           title={label} // Tooltip on hover
         >
           {svg}

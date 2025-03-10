@@ -1,16 +1,16 @@
-export function UndoRedo({
-  undo,
-  redo,
-}: {
+interface UndoRedoProps {
   undo: () => void;
   redo: () => void;
-}) {
+  darkMode: boolean;
+}
+
+export function UndoRedo({undo , redo , darkMode} : UndoRedoProps) {
   return (
     <nav>
-      <ul className="flex gap-2 bg-gray-200 rounded-md">
+      <ul className={`flex gap-2 ${darkMode ? "bg-[#232329] text-white" : "bg-white text-black"} rounded-md `}>
         <li>
           <button
-            className="pl-4 pr-2 py-2 rounded-l-md hover:bg-[#f2f2fa] "
+            className={`pl-4 pr-2 py-2 rounded-l-md ${darkMode ? "hover:bg-[#403E6A]" : "hover:bg-[#f2f2fa]"} `}
             onClick={() => undo()}
           >
             <svg
@@ -33,7 +33,7 @@ export function UndoRedo({
         </li>
         <li>
           <button
-            className="pr-4 pl-2 py-2 hover:bg-[#f2f2fa] rounded-r-md"
+            className={`pr-4 pl-2 py-2 ${darkMode ? "hover:bg-[#403E6A]" : "hover:bg-[#f2f2fa]"} rounded-r-md`}
             onClick={() => redo()}
           >
             <svg
