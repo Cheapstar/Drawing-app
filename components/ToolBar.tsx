@@ -1,5 +1,5 @@
 "use client";
-import React , { useState } from "react";
+import React from "react";
 import { TOOL } from "./WhiteBoard";
 import { toolAtom } from "@/store/store";
 import { useAtom } from "jotai";
