@@ -1,5 +1,7 @@
 "use client";
 import { MdDarkMode } from "react-icons/md";
+import { CiLight } from "react-icons/ci";
+
 
 
 import React, {
@@ -1380,7 +1382,7 @@ export function WhiteBoard() {
       >
         <ToolBar darkMode={darkMode} selectTool={selectTool}></ToolBar>
         <button onClick={handleDark} className={` ${darkMode ? "bg-[#232329] text-white" : "bg-white text-black"} shadow-md rounded-lg p-4 flex gap-1 border border-gray-300`}>  
-            <MdDarkMode className="text-2xl"/>
+          {darkMode ? <MdDarkMode className="text-2xl"/> : <CiLight className="text-2xl"/>}
         </button>
       </div>
       <div
