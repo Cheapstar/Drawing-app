@@ -2,7 +2,11 @@
 import { colorAtom } from "@/store/store";
 import { useAtom } from "jotai";
 
-export function ColorPicker() {
+interface ColorProps{
+  darkMode : boolean
+}
+
+export function ColorPicker({darkMode} : ColorProps) {
   // Excalidraw-like color palette
   const colors = [
     { value: "#ffffff", label: "White" },
@@ -23,9 +27,9 @@ export function ColorPicker() {
   };
 
   return (
-    <div className=" bg-white ">
+    <div className={` ${darkMode ? "bg-[#232329] text-white" : "bg-white text-black"} `}>
       <div>
-        <p className="py-2 text-xs text-gray-600">Stroke</p>
+        <p className={`py-2 text-xs ${darkMode ? "text-gray-300" : "text-gray-600"} `}>Stroke</p>
       </div>
       <div className="flex flex-wrap gap-2 mb-2 max-w-[200px]">
         {colors.map((c) => (
