@@ -1,25 +1,24 @@
 "use client";
 import React from "react";
-import { TOOL } from "./WhiteBoard";
-import { toolAtom } from "@/store/store";
+import { TOOL } from "../types/types";
+import { darkModeAtom, toolAtom } from "@/store/store";
 import { useAtom } from "jotai";
 
-interface ToolBarProps {
-  selectTool: (tool: TOOL) => void;
-  darkMode: boolean;
-}
-
-export function ToolBar({ selectTool, darkMode }: ToolBarProps) {
+export function ToolBar() {
   const [activeTool, setActiveTool] = useAtom(toolAtom);
+  const [darkMode] = useAtom(darkModeAtom);
 
   return (
-    <nav className={`${darkMode ? "bg-[#232329] text-white" : "bg-white text-black"} shadow-md rounded-lg p-2 flex gap-1 border border-gray-300`}>
+    <nav
+      className={`${
+        darkMode ? "bg-[#232329] text-white" : "bg-white text-black"
+      } shadow-md rounded-lg p-2 flex gap-1 border border-gray-300`}
+    >
       {BOARD_TOOLS.map(({ value, label, svg }) => (
         <button
           key={value}
           onClick={() => {
             setActiveTool(value as TOOL);
-            selectTool(value as TOOL);
           }}
           className={`w-10 h-10 flex items-center justify-center rounded-md transition-colors ${
             activeTool === value
@@ -28,7 +27,6 @@ export function ToolBar({ selectTool, darkMode }: ToolBarProps) {
                 : "bg-gray-300 hover:bg-gray-200"
               : ""
           }`}
-          
           title={label} // Tooltip on hover
         >
           {svg}
@@ -118,8 +116,8 @@ const BOARD_TOOLS = [
     ),
   },
   {
-    value: "pencil",
-    label: "Pencil",
+    value: "freehand",
+    label: "Freehand",
     svg: (
       <svg
         viewBox="0 0 20 20"
