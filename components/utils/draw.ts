@@ -11,6 +11,7 @@ export const drawElement = (
   switch (element.type) {
     case "line":
       ctx.save();
+
       const line = createLine(element);
       if (element.opacity) {
         ctx.globalAlpha = element.opacity;
