@@ -270,6 +270,7 @@ export function WhiteBoard() {
 
     // Select tool
     if (tool === "select") {
+      console.log("This is runnnig");
       const elementAtPosition = getElementAtPosition(
         clientX,
         clientY,
@@ -309,11 +310,10 @@ export function WhiteBoard() {
 
         if (elementAtPosition.selectedPosition === "inside") {
           setAction("moving");
-        } else {
-          setAction("resizing");
         }
       } else if (selectedElement) {
         // Check if click is in the highlighted selection zone
+        console.log("Selected Position is", selectedElement.selectedPosition);
         const boundingBox = getElementBoundingBox(selectedElement);
         const isInside = positionOnRectangle(
           clientX,
@@ -423,6 +423,9 @@ export function WhiteBoard() {
   // Handler for pointer move events
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const { x: clientX, y: clientY } = getMouseCoordinates(event);
+
+    if (selectedElement) {
+    }
 
     // Handle moving elements
     if (action === "moving" && selectedElement) {
@@ -535,10 +538,8 @@ export function WhiteBoard() {
       if (!selectedPosition) return;
 
       const boundingBox = getElementBoundingBox(selectedElement);
-      const width =
-        boundingBox.x2 !== undefined ? boundingBox.x2 - boundingBox.x1 : 0;
-      const height =
-        boundingBox.y2 !== undefined ? boundingBox.y2 - boundingBox.y1 : 0;
+      const width = boundingBox.width;
+      const height = boundingBox.height;
 
       let scaleX = 1,
         scaleY = 1;

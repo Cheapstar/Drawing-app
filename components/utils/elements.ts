@@ -31,6 +31,7 @@ export const createRectangle = (element: RectangleElement) => {
     {
       stroke: element.color,
       strokeWidth: (element.strokeWidth as number) / 8,
+      ...options,
     }
   );
   return roughElement;
@@ -45,6 +46,7 @@ export const createLine = (element: LineElement) => {
     {
       stroke: element.color,
       strokeWidth: (element.strokeWidth as number) / 8,
+      ...options,
     }
   );
   return roughElement;

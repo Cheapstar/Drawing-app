@@ -65,7 +65,7 @@ export const nearPoint = (
   x2: number,
   y2: number
 ): boolean => {
-  return Math.abs(x2 - x1) < 10 && Math.abs(y2 - y1) < 10;
+  return Math.abs(x2 - x1) < 0 && Math.abs(y2 - y1) < 0;
 };
 
 export const positionOnPencil = (client: Point, stroke?: number[][]) => {

@@ -8,4 +8,4 @@ export const fontSizeAtom = atom<number>(32);
 export const fontFamilyAtom = atom<string>("virgilFont");
 export const toolAtom = atom<TOOL>("select");
 
-export const darkModeAtom = atom<boolean>(true);
+export const darkModeAtom = atom<boolean>(false);
