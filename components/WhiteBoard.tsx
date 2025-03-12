@@ -67,6 +67,23 @@ const updateEachStroke = (
   return newStrokes;
 };
 
+interface BoundingElement {
+  x1: number;
+  x2: number;
+  y1: number;
+  y2: number;
+  width: number;
+  height: number;
+}
+
+type CursorAction =
+  | "vertical"
+  | "horizontal"
+  | "acute"
+  | "obtuse"
+  | "inside"
+  | "none";
+
 export function WhiteBoard() {
   const [elements, setElements, undo, redo] = useHistory([]);
   const [tool, setTool] = useAtom(toolAtom);
@@ -84,6 +101,9 @@ export function WhiteBoard() {
   const [fontSize] = useAtom(fontSizeAtom);
   const [fontFamily] = useAtom(fontFamilyAtom);
   const [darkMode] = useAtom(darkModeAtom);
+
+  const [boundingElement, setBoundingElement] = useState<BoundingElement>();
+  const [cursorAction, setCursorAction] = useState<CursorAction>();
 
   const boardRef = useRef<HTMLCanvasElement>(null);
   const textElementRef = useRef<HTMLTextAreaElement>(null);
@@ -136,6 +156,7 @@ export function WhiteBoard() {
   }, [tool]);
 
   // Draw the canvas
+  // Draw the canvas
   useLayoutEffect(() => {
     const canvas = boardRef.current;
     if (!canvas) return;
@@ -152,11 +173,11 @@ export function WhiteBoard() {
     const scaledWidth = (canvas.width * scale) / dpr;
     const scaledHeight = (canvas.height * scale) / dpr;
 
+    // Calculate scale offset but don't set state here
     const scaleOffsetX = (scaledWidth - canvas.width / dpr) / 2;
     const scaleOffsetY = (scaledHeight - canvas.height / dpr) / 2;
 
-    setScaleOffset({ x: scaleOffsetX, y: scaleOffsetY });
-
+    // Use the calculated values directly instead of from state
     ctx.save();
 
     // Scale for high DPR displays first
@@ -170,20 +191,57 @@ export function WhiteBoard() {
 
     // Draw all elements
     elements.forEach((element: Element) => {
+      if (selectedElement && element.id === selectedElement.id) {
+        drawElement(rc, ctx, selectedElement);
+        return;
+      }
       drawElement(rc, ctx, element);
     });
 
     // Draw selection indicator
     if (selectedElement) {
-      const { x1, y1, width, height } = getElementBoundingBox(selectedElement);
+      const { x1, y1, width, height } = getElementBoundingBox(
+        selectedElement,
+        scale
+      );
       ctx.save();
+      ctx.lineWidth = getLineWidth(scale);
       ctx.strokeStyle = "#6965db";
       ctx.strokeRect(x1, y1, width, height);
+      ctx.fillStyle = "white";
+      ctx.fillRect(x1 - 5, y1 - 5, 10, 10);
+      ctx.strokeRect(x1 - 5, y1 - 5, 10, 10);
+      ctx.fillRect(x1 + width - 5, y1 - 5, 10, 10);
+      ctx.strokeRect(x1 + width - 5, y1 - 5, 10, 10);
+      ctx.fillRect(x1 - 5, y1 + height - 5, 10, 10);
+      ctx.strokeRect(x1 - 5, y1 + height - 5, 10, 10);
+      ctx.fillRect(x1 + width - 5, y1 + height - 5, 10, 10);
+      ctx.strokeRect(x1 + width - 5, y1 + height - 5, 10, 10);
       ctx.restore();
     }
 
     ctx.restore();
   }, [elements, selectedElement, panOffset, scale, action]);
+
+  // Add a separate effect to update scaleOffset only when scale or canvas size changes
+  useEffect(() => {
+    const canvas = boardRef.current;
+    if (!canvas) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const scaledWidth = (canvas.width * scale) / dpr;
+    const scaledHeight = (canvas.height * scale) / dpr;
+
+    const scaleOffsetX = (scaledWidth - canvas.width / dpr) / 2;
+    const scaleOffsetY = (scaledHeight - canvas.height / dpr) / 2;
+
+    setScaleOffset({ x: scaleOffsetX, y: scaleOffsetY });
+  }, [scale, boardRef.current?.width, boardRef.current?.height]);
+
+  function getLineWidth(scale: number) {
+    if (scale >= 1) return 1.5;
+    return 1.5 + (Math.abs(1 - scale) * 5 - Math.abs(scale));
+  }
 
   // Utility function to get mouse coordinates adjusted for pan and scale
   const getMouseCoordinates = (
@@ -234,6 +292,32 @@ export function WhiteBoard() {
     setElements(updatedElements, true);
   };
 
+  function getTheOffsets(elementAtPosition: Element, client: Point) {
+    const offsetX = [];
+    const offsetY = [];
+
+    switch (elementAtPosition.type) {
+      case "rectangle":
+      case "line":
+      case "text":
+        offsetX.push(client.x - (elementAtPosition.x1 as number));
+        offsetY.push(client.y - (elementAtPosition.y1 as number));
+        break;
+      case "freehand":
+        const freehandElement = elementAtPosition as FreehandElement;
+        for (let i = 0; i < freehandElement.stroke.length; i++) {
+          offsetX.push(client.x - freehandElement.stroke[i][0]);
+          offsetY.push(client.y - freehandElement.stroke[i][1]);
+        }
+        break;
+    }
+
+    return {
+      x: offsetX,
+      y: offsetY,
+    };
+  }
+
   // Handler for pointer down events
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const { x: clientX, y: clientY } = getMouseCoordinates(event);
@@ -242,7 +326,9 @@ export function WhiteBoard() {
 
     // Eraser tool
     if (tool === "eraser") {
+      setSelectedElement(null);
       const element = getElementAtPosition(clientX, clientY, elements);
+      console.log("Erased Element", element);
 
       setAction("erasing");
       if (element.id && element.selectedPosition) {
@@ -270,98 +356,106 @@ export function WhiteBoard() {
 
     // Select tool
     if (tool === "select") {
-      console.log("This is runnnig");
+      // get the element with its selected Position
       const elementAtPosition = getElementAtPosition(
         clientX,
         clientY,
         elements
       );
 
-      if (elementAtPosition.selectedPosition) {
-        const offsetX: number[] = [];
-        const offsetY: number[] = [];
+      if (!elementAtPosition) return;
 
-        // Calculate offsets based on element type
+      if (elementAtPosition && !selectedElement) {
         if (
-          elementAtPosition.type === "freehand" &&
-          (elementAtPosition as FreehandElement).stroke
-        ) {
-          const freehandElement = elementAtPosition as FreehandElement;
-          for (let i = 0; i < freehandElement.stroke.length; i++) {
-            offsetX.push(clientX - freehandElement.stroke[i][0]);
-            offsetY.push(clientY - freehandElement.stroke[i][1]);
-          }
-        } else {
-          offsetX.push(clientX - (elementAtPosition.x1 as number));
-          offsetY.push(clientY - (elementAtPosition.y1 as number));
-        }
+          elementAtPosition.type === "rectangle" &&
+          elementAtPosition.selectedPosition === "inside"
+        )
+          return;
+
+        let offset: {
+          x: number[];
+          y: number[];
+        } = { x: [], y: [] };
 
         const fullElement = elements.find(
           (el) => el.id === elementAtPosition.id
         );
         if (!fullElement) return;
 
+        offset = getTheOffsets(
+          elementAtPosition as Element,
+          point(clientX, clientY)
+        );
+
         setSelectedElement({
-          ...fullElement,
-          offsetX,
-          offsetY,
+          ...(fullElement as Element),
+          offsetX: offset.x,
+          offsetY: offset.y,
           selectedPosition: elementAtPosition.selectedPosition,
         });
 
-        if (elementAtPosition.selectedPosition === "inside") {
-          setAction("moving");
-        }
+        setBoundingElement(getElementBoundingBox(fullElement, scale));
+        setAction("moving");
+        console.log("Selected Element is v3", {
+          ...(fullElement as Element),
+          offsetX: offset.x,
+          offsetY: offset.y,
+          selectedPosition: elementAtPosition.selectedPosition,
+        });
       } else if (selectedElement) {
         // Check if click is in the highlighted selection zone
         console.log("Selected Position is", selectedElement.selectedPosition);
-        const boundingBox = getElementBoundingBox(selectedElement);
+
+        const boundingBox = getElementBoundingBox(
+          { ...selectedElement },
+          scale
+        );
         const isInside = positionOnRectangle(
           clientX,
           clientY,
-          boundingBox.x1 - 5,
-          boundingBox.y1 - 5,
-          boundingBox.x2 !== undefined
-            ? boundingBox.x2 + 10
-            : boundingBox.x1 + 10,
-          boundingBox.y2 !== undefined
-            ? boundingBox.y2 + 10
-            : boundingBox.y1 + 10
+          boundingBox.x1,
+          boundingBox.y1,
+          boundingBox.x2 !== undefined ? boundingBox.x2 : boundingBox.x1,
+          boundingBox.y2 !== undefined ? boundingBox.y2 : boundingBox.y1
         );
 
         if (!isInside) {
           setSelectedElement(null);
           setAction("selecting");
         } else if (isInside === "inside") {
-          const offsetX: number[] = [];
-          const offsetY: number[] = [];
+          let offset: {
+            x: number[];
+            y: number[];
+          } = { x: [], y: [] };
 
-          if (
-            selectedElement.type === "freehand" &&
-            (selectedElement as FreehandElement).stroke
-          ) {
-            const freehandElement = selectedElement as FreehandElement;
-            for (let i = 0; i < freehandElement.stroke.length; i++) {
-              offsetX.push(clientX - freehandElement.stroke[i][0]);
-              offsetY.push(clientY - freehandElement.stroke[i][1]);
-            }
-          } else {
-            offsetX.push(clientX - selectedElement.x1);
-            offsetY.push(clientY - selectedElement.y1);
-          }
+          offset = getTheOffsets(
+            { ...selectedElement },
+            point(clientX, clientY)
+          );
 
           setSelectedElement({
             ...selectedElement,
-            offsetX,
-            offsetY,
+            offsetX: offset.x,
+            offsetY: offset.y,
             selectedPosition: isInside,
           });
 
+          setBoundingElement(
+            getElementBoundingBox({ ...selectedElement }, scale)
+          );
           setAction("moving");
+          console.log("Selected Element is v1", selectedElement);
         } else {
+          console.log("Selected Element is v2", selectedElement);
+
           setSelectedElement({
             ...selectedElement,
             selectedPosition: isInside,
           });
+          setBoundingElement(
+            getElementBoundingBox({ ...selectedElement }, scale)
+          );
+
           setAction("resizing");
         }
       }
@@ -408,13 +502,14 @@ export function WhiteBoard() {
       } else if (tool === "freehand") {
         const newElement: FreehandElement = {
           id: crypto.randomUUID(),
-          x1: 0,
-          y1: 0,
+          x1: clientX,
+          y1: clientY,
           type: "freehand",
           stroke: [[clientX, clientY, event.pressure]],
           color,
           strokeWidth,
         };
+
         setElements([...elements, newElement]);
       }
     }
@@ -422,13 +517,13 @@ export function WhiteBoard() {
 
   // Handler for pointer move events
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const { x: clientX, y: clientY } = getMouseCoordinates(event);
+    let { x: clientX, y: clientY } = getMouseCoordinates(event);
 
-    if (selectedElement) {
-    }
+    console.log("Current State is", tool);
 
     // Handle moving elements
     if (action === "moving" && selectedElement) {
+      console.log("Moving");
       const index = elements.findIndex(
         (element) => selectedElement.id === element.id
       );
@@ -451,19 +546,23 @@ export function WhiteBoard() {
 
         if (!newStrokes) return;
 
-        updateElement(index, {
-          id: element.id,
-          x1: 0,
-          y1: 0,
-          stroke: newStrokes,
-        });
-
         setSelectedElement({
           ...selectedElement,
           x1: 0,
           y1: 0,
           stroke: [...newStrokes],
         });
+
+        setBoundingElement(
+          getElementBoundingBox(
+            {
+              ...selectedElement,
+
+              stroke: [...newStrokes],
+            },
+            scale
+          )
+        );
       } else {
         // For rectangle, line, and text elements
         const x2 = element.x2 !== undefined ? element.x2 : element.x1;
@@ -477,13 +576,7 @@ export function WhiteBoard() {
         const newX2 = newX1 + width;
         const newY2 = newY1 + height;
 
-        updateElement(index, {
-          id: element.id,
-          x1: newX1,
-          y1: newY1,
-          x2: newX2,
-          y2: newY2,
-        });
+        const padding = 15 * scale;
 
         setSelectedElement({
           ...selectedElement,
@@ -491,6 +584,15 @@ export function WhiteBoard() {
           y1: newY1,
           x2: newX2,
           y2: newY2,
+        });
+
+        setBoundingElement({
+          x1: newX1 - padding,
+          y1: newY1 - padding,
+          x2: newX2 + padding,
+          y2: newY2 + padding,
+          height: Math.abs(newY2 - newY1) + 2 * padding,
+          width: Math.abs(newX2 - newX1) + 2 * padding,
         });
       }
       return;
@@ -510,7 +612,9 @@ export function WhiteBoard() {
           [clientX, clientY, event.pressure],
         ];
 
+        console.log("Current Element is", freehandElement);
         updateElement(lastIndex, {
+          ...currentElement,
           id: currentElement.id,
           stroke: newStroke,
         });
@@ -537,130 +641,151 @@ export function WhiteBoard() {
       const { selectedPosition } = selectedElement;
       if (!selectedPosition) return;
 
-      const boundingBox = getElementBoundingBox(selectedElement);
+      // First get proper bounding box from the helper function
+      const originalBoundingBox = selectedElement;
+
+      console.log("Selected Element is V5", selectedElement);
+
+      const { height: Bheight, width: Bwidth } = getElementBoundingBox(
+        { ...selectedElement },
+        scale
+      );
+      // Then normalize it correctly
+      const padding = 15 * scale;
+      const boundingBox = {
+        x1: originalBoundingBox.x1,
+        y1: originalBoundingBox.y1,
+        x2:
+          selectedElement.type != "freehand"
+            ? originalBoundingBox.x2
+            : originalBoundingBox.x1 + Bwidth - 2 * padding,
+        y2:
+          selectedElement.type != "freehand"
+            ? originalBoundingBox.y2
+            : originalBoundingBox.y1 + Bheight - 2 * padding,
+        width: Bwidth - 2 * padding,
+        height: Bheight - 2 * padding,
+      };
+
+      // Fixed issue: Initialize newX1, newY1, newX2, newY2 with original box values
+      let newX1 = boundingBox.x1;
+      let newY1 = boundingBox.y1;
+      let newX2 = boundingBox.x2;
+      let newY2 = boundingBox.y2;
+
+      // Initialize scaling and reference points
+      let scaleX = 1,
+        scaleY = 1;
+      let referenceX = boundingBox.x1,
+        referenceY = boundingBox.y1;
       const width = boundingBox.width;
       const height = boundingBox.height;
 
-      let scaleX = 1,
-        scaleY = 1;
-      let newX1 = boundingBox.x1,
-        newY1 = boundingBox.y1;
-      let newX2 = boundingBox.x2 ?? boundingBox.x1;
-      let newY2 = boundingBox.y2 ?? boundingBox.y1;
-      let referenceX = boundingBox.x1,
-        referenceY = boundingBox.y1;
+      console.log("BoundingBox is ", referenceX, referenceY);
 
       // Calculate new dimensions based on resize handle position
       switch (selectedPosition) {
         case "b":
-          scaleY = height !== 0 ? (clientY - boundingBox.y1) / height : 1;
+          newY2 = clientY - padding;
+          scaleY = height !== 0 ? (newY2 - boundingBox.y1) / height : 1;
           referenceY = boundingBox.y1;
-          newY2 = clientY;
           break;
         case "t":
-          scaleY =
-            height !== 0 ? ((boundingBox.y2 as number) - clientY) / height : 1;
-          referenceY = boundingBox.y2 as number;
-          newY1 = clientY;
+          newY1 = clientY + padding;
+          scaleY = height !== 0 ? (boundingBox.y2 - newY1) / height : 1;
+          referenceY = boundingBox.y2;
           break;
         case "l":
-          scaleX =
-            width !== 0 ? ((boundingBox.x2 as number) - clientX) / width : 1;
-          referenceX = boundingBox.x2 as number;
-          newX1 = clientX;
+          newX1 = clientX + padding;
+          scaleX = width !== 0 ? (boundingBox.x2 - newX1) / width : 1;
+          referenceX = boundingBox.x2;
           break;
         case "r":
-          scaleX = width !== 0 ? (clientX - boundingBox.x1) / width : 1;
+          newX2 = clientX - padding;
+          scaleX = width !== 0 ? (newX2 - boundingBox.x1) / width : 1;
           referenceX = boundingBox.x1;
-          newX2 = clientX;
           break;
         case "start":
         case "tl":
-          scaleX =
-            width !== 0 ? ((boundingBox.x2 as number) - clientX) / width : 1;
-          scaleY =
-            height !== 0 ? ((boundingBox.y2 as number) - clientY) / height : 1;
-          referenceX = boundingBox.x2 as number;
-          referenceY = boundingBox.y2 as number;
-          newX1 = clientX;
-          newY1 = clientY;
+          newX1 = clientX + padding;
+          newY1 = clientY + padding;
+          scaleX = width !== 0 ? (boundingBox.x2 - newX1) / width : 1;
+          scaleY = height !== 0 ? (boundingBox.y2 - newY1) / height : 1;
+          referenceX = boundingBox.x2;
+          referenceY = boundingBox.y2;
           break;
         case "tr":
-          scaleX = width !== 0 ? (clientX - boundingBox.x1) / width : 1;
-          scaleY =
-            height !== 0 ? ((boundingBox.y2 as number) - clientY) / height : 1;
+          newX2 = clientX - padding;
+          newY1 = clientY + padding;
+          scaleX = width !== 0 ? (newX2 - boundingBox.x1) / width : 1;
+          scaleY = height !== 0 ? (boundingBox.y2 - newY1) / height : 1;
           referenceX = boundingBox.x1;
-          referenceY = boundingBox.y2 as number;
-          newX2 = clientX;
-          newY1 = clientY;
+          referenceY = boundingBox.y2;
           break;
         case "bl":
-          scaleX =
-            width !== 0 ? ((boundingBox.x2 as number) - clientX) / width : 1;
-          scaleY = height !== 0 ? (clientY - boundingBox.y1) / height : 1;
-          referenceX = boundingBox.x2 as number;
+          newX1 = clientX + padding;
+          newY2 = clientY - padding;
+          scaleX = width !== 0 ? (boundingBox.x2 - newX1) / width : 1;
+          scaleY = height !== 0 ? (newY2 - boundingBox.y1) / height : 1;
+          referenceX = boundingBox.x2;
           referenceY = boundingBox.y1;
-          newX1 = clientX;
-          newY2 = clientY;
           break;
         case "end":
         case "br":
-          scaleX = width !== 0 ? (clientX - boundingBox.x1) / width : 1;
-          scaleY = height !== 0 ? (clientY - boundingBox.y1) / height : 1;
+          newX2 = clientX - padding;
+          newY2 = clientY - padding;
+          scaleX = width !== 0 ? (newX2 - boundingBox.x1) / width : 1;
+          scaleY = height !== 0 ? (newY2 - boundingBox.y1) / height : 1;
           referenceX = boundingBox.x1;
           referenceY = boundingBox.y1;
-          newX2 = clientX;
-          newY2 = clientY;
           break;
       }
 
       // Apply updates based on element type
       if (selectedElement.type === "freehand") {
         const freehandElement = selectedElement as FreehandElement;
-        let updatedStrokes = [...freehandElement.stroke];
 
-        // Scale each point in the stroke
-        updatedStrokes = updatedStrokes.map(([px, py, pressure]) => [
-          referenceX + (px - referenceX) * scaleX,
-          referenceY + (py - referenceY) * scaleY,
-          pressure,
-        ]);
+        // Scale each point in the stroke relative to the reference point
+        const updatedStrokes = freehandElement.stroke.map(
+          ([px, py, pressure]) => [
+            referenceX + (px - referenceX) * scaleX,
+            referenceY + (py - referenceY) * scaleY,
+            pressure,
+          ]
+        );
 
-        updateElement(index, {
-          id: selectedElement.id,
-          x1: newX1,
-          y1: newY1,
-          x2: newX2,
-          y2: newY2,
-          stroke: updatedStrokes,
-        });
-
-        setSelectedElement({
+        // Update the element with new values
+        const updatedElement = {
           ...selectedElement,
           x1: newX1,
           y1: newY1,
           x2: newX2,
           y2: newY2,
           stroke: updatedStrokes,
-        });
+        };
+
+        setSelectedElement(updatedElement);
+        setBoundingElement(getElementBoundingBox(updatedElement, scale));
       } else {
-        updateElement(index, {
-          id: selectedElement.id,
-          x1: newX1,
-          y1: newY1,
-          x2: newX2,
-          y2: newY2,
-        });
-
-        setSelectedElement({
+        // For non-freehand elements
+        const updatedElement = {
           ...selectedElement,
           x1: newX1,
           y1: newY1,
           x2: newX2,
           y2: newY2,
+        };
+
+        setSelectedElement(updatedElement);
+        setBoundingElement({
+          x1: newX1 - padding,
+          y1: newY1 - padding,
+          x2: newX2 + padding,
+          y2: newY2 + padding,
+          width: newX2 - newX1 + 2 * padding,
+          height: newY2 - newY1 + 2 * padding,
         });
       }
-      return;
     }
 
     // Handle panning
@@ -693,13 +818,55 @@ export function WhiteBoard() {
         }
       }
     }
+
+    // cursor
+    if (selectedElement && boundingElement) {
+      const positionOnElement = positionOnRectangle(
+        clientX,
+        clientY,
+        boundingElement.x1,
+        boundingElement.y1,
+        boundingElement.x2,
+        boundingElement.y2
+      );
+
+      switch (positionOnElement) {
+        case "b":
+        case "t":
+          setCursorAction("vertical");
+          break;
+        case "l":
+        case "r":
+          setCursorAction("horizontal");
+          break;
+        case "bl":
+        case "tr":
+          setCursorAction("acute");
+          break;
+        case "br":
+        case "tl":
+          setCursorAction("obtuse");
+          break;
+        case "inside":
+          setCursorAction("inside");
+          break;
+
+        default:
+          setCursorAction("none");
+          break;
+      }
+    }
   };
 
   // Handler for pointer up events
+  // Fix for the handlePointerUp function
   const handlePointerUp = () => {
     // Handle erasing
     if (action === "erasing") {
-      if (eraseElements.length === 0) return;
+      if (eraseElements.length === 0) {
+        setAction("none");
+        return;
+      }
 
       const newElements = elements.filter(
         (element) =>
@@ -709,6 +876,8 @@ export function WhiteBoard() {
       setElements(newElements);
       setEraseElements([]);
       setSelectedElement(null);
+      setAction("none");
+      return;
     }
 
     // Skip for writing action
@@ -744,6 +913,49 @@ export function WhiteBoard() {
           y2: newY2,
         });
       }
+      setAction("none");
+      return;
+    }
+
+    // Handle resizing
+    if ((action === "resizing" || action === "moving") && selectedElement) {
+      const index = elements.findIndex(
+        (element) => element.id === selectedElement.id
+      );
+
+      if (index !== -1) {
+        // Create a copy of the elements array
+        const updatedElements = [...elements];
+
+        const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
+          selectedElement.type as Shapes,
+          selectedElement.x1,
+          selectedElement.y1,
+          selectedElement.x2 as number,
+          selectedElement.y2 as number
+        );
+        // Replace the element at the index with the selectedElement
+        updatedElements[index] = {
+          ...selectedElement,
+          x1: newX1,
+          y1: newY1,
+          x2: newX2,
+          y2: newY2,
+        };
+        setSelectedElement({
+          ...selectedElement,
+          x1: newX1,
+          y1: newY1,
+          x2: newX2,
+          y2: newY2,
+        });
+        // Update the elements state
+        setElements(updatedElements);
+
+        // Clear the bounding element
+      }
+      setAction("none");
+      return;
     }
 
     // Reset action state
@@ -795,6 +1007,12 @@ export function WhiteBoard() {
 
   // Get appropriate cursor based on current tool and action
   const getCursorForTool = (): string => {
+    if (cursorAction === "horizontal") return "ew-resize";
+    if (cursorAction === "vertical") return "ns-resize";
+    if (cursorAction === "acute") return "nesw-resize";
+    if (cursorAction === "obtuse") return "nwse-resize";
+    if (cursorAction === "inside") return "move";
+
     if (action === "moving") return "move";
     if (action === "resizing") return "nwse-resize";
     if (action === "panning") return "grabbing";
@@ -810,8 +1028,14 @@ export function WhiteBoard() {
       <div
         className="fixed flex top-4 left-1/2 -translate-x-1/2 items-center gap-2"
         style={{
-          cursor: action === "drawing" ? "not-allowed" : "default",
-          pointerEvents: action === "drawing" ? "none" : "auto",
+          cursor:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "not-allowed"
+              : "default",
+          pointerEvents:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "none"
+              : "auto",
         }}
       >
         <ToolBar />
@@ -822,8 +1046,14 @@ export function WhiteBoard() {
       <div
         className="fixed bottom-5 left-6 rounded-md shadow-lg"
         style={{
-          cursor: action === "drawing" ? "not-allowed" : "default",
-          pointerEvents: action === "drawing" ? "none" : "auto",
+          cursor:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "not-allowed"
+              : "default",
+          pointerEvents:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "none"
+              : "auto",
         }}
       >
         <UndoRedo
@@ -837,8 +1067,14 @@ export function WhiteBoard() {
       <div
         className="fixed bottom-5 right-6 rounded-md shadow-lg"
         style={{
-          cursor: action === "drawing" ? "not-allowed" : "default",
-          pointerEvents: action === "drawing" ? "none" : "auto",
+          cursor:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "not-allowed"
+              : "default",
+          pointerEvents:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "none"
+              : "auto",
         }}
       >
         <ZoomButtons
@@ -854,8 +1090,14 @@ export function WhiteBoard() {
           darkMode ? "bg-[#232329] text-white" : "bg-white text-black "
         }`}
         style={{
-          cursor: action === "drawing" ? "not-allowed" : "default",
-          pointerEvents: action === "drawing" ? "none" : "auto",
+          cursor:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "not-allowed"
+              : "default",
+          pointerEvents:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "none"
+              : "auto",
         }}
       >
         <Menu darkMode={darkMode} />
@@ -896,7 +1138,7 @@ export function WhiteBoard() {
 }
 
 // Tools configuration
-const TOOLS: Record<TOOL, { cursor: string }> = {
+const TOOLS: Record<TOOL | string, { cursor: string }> = {
   rectangle: { cursor: "crosshair" },
   line: { cursor: "crosshair" },
   move: { cursor: "move" },

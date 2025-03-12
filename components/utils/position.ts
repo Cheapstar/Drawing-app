@@ -23,6 +23,8 @@ export const getElementAtPosition = (
     }
   );
 
+  console.log("Found Element Position is ", position);
+
   return {
     ...(foundElement || {}),
     selectedPosition: position,
@@ -49,6 +51,7 @@ export const positionWithinShape = (
         point(x2, y2)
       );
     case "freehand":
+      console.log("Get the stroke", stroke);
       return positionOnPencil(point(clientX, clientY), stroke as number[][]);
     case "text":
       return clientX >= x1 && clientY >= y1 && clientX <= x2 && clientY <= y2
@@ -65,11 +68,17 @@ export const nearPoint = (
   x2: number,
   y2: number
 ): boolean => {
-  return Math.abs(x2 - x1) < 0 && Math.abs(y2 - y1) < 0;
+  return Math.abs(x2 - x1) < 10 && Math.abs(y2 - y1) < 10;
 };
 
 export const positionOnPencil = (client: Point, stroke?: number[][]) => {
-  if (!stroke || stroke.length < 2) return null;
+  if (!stroke || stroke.length < 1) return null;
+  if (stroke.length === 1) {
+    return nearPoint(client.x, client.y, stroke[0][0], stroke[0][1])
+      ? "inside"
+      : null;
+  }
+
   let a = stroke[0];
 
   for (let i = 1; i < stroke.length; i++) {

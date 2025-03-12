@@ -102,10 +102,10 @@ export const adjustElementCoordinates = (
   y2: number
 ): { newX1: number; newY1: number; newX2: number; newY2: number } => {
   if (type === "rectangle") {
-    const MinX = Math.min(x1, x2);
-    const MaxX = Math.max(x1, x2);
-    const MinY = Math.min(y1, y2);
-    const MaxY = Math.max(y1, y2);
+    const MinX = Math.min(x1 ?? 0, x2 ?? 0);
+    const MaxX = Math.max(x1 ?? 0, x2 ?? 0);
+    const MinY = Math.min(y1 ?? 0, y2 ?? 0);
+    const MaxY = Math.max(y1 ?? 0, y2 ?? 0);
 
     return {
       newX1: MinX,
@@ -123,8 +123,8 @@ export const adjustElementCoordinates = (
       };
     } else {
       return {
-        newX1: x2,
-        newY1: y2,
+        newX1: x2 ?? x1,
+        newY1: y2 ?? y1,
         newX2: x1,
         newY2: y1,
       };
@@ -132,8 +132,21 @@ export const adjustElementCoordinates = (
   }
 };
 
+export function scaleStroke(
+  stroke: number[][],
+  scaleX: number,
+  scaleY: number,
+  originX: number,
+  originY: number
+) {
+  return stroke.map(([px, py]) => [
+    originX + (px - originX) * scaleX,
+    originY + (py - originY) * scaleY,
+  ]);
+}
+
 // Get bounding box for any element type
-export function getElementBoundingBox(element: Element) {
+export function getElementBoundingBox(element: Element, scale: number) {
   switch (element.type) {
     case Shapes.Rectangle:
     case Shapes.Ellipse:
@@ -144,12 +157,31 @@ export function getElementBoundingBox(element: Element) {
       const y1 = Math.min(element.y1, element.y2);
       const x2 = Math.max(element.x1, element.x2);
       const y2 = Math.max(element.y1, element.y2);
-      return { x1, y1, x2, y2, width: x2 - x1, height: y2 - y1 };
+      return {
+        x1: x1 - 15 * scale,
+        y1: y1 - 15 * scale,
+        x2: x2 + 15 * scale,
+        y2: y2 + 15 * scale,
+        width: x2 - x1 + 30 * scale,
+        height: y2 - y1 + 30 * scale,
+      };
 
     case Shapes.Freehand:
       // Initialize with extreme values or first point if available
       if (!element.stroke.length) {
         return { x1: 0, y1: 0, x2: 0, y2: 0, width: 0, height: 0 };
+      }
+
+      if (element.stroke.length === 1) {
+        console.log("Here is the Bounding Box");
+        return {
+          x1: element.stroke[0][0],
+          y1: element.stroke[0][1],
+          x2: element.stroke[0][0],
+          y2: element.stroke[0][1],
+          width: 10,
+          height: 10,
+        };
       }
 
       let minX = element.stroke[0][0];
