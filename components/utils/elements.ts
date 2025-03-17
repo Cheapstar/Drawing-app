@@ -114,7 +114,9 @@ export const adjustElementCoordinates = (
       newY2: MaxY,
     };
   } else {
-    if (x1 < x2 || (x2 === x1 && y1 < y2)) {
+    // When line is drawn from left to right or
+    // from top to bottom and it is vertical
+    if (x1 < x2 || (x2 === x1 && y2 < y1)) {
       return {
         newX1: x1,
         newY1: y1,
@@ -122,6 +124,8 @@ export const adjustElementCoordinates = (
         newY2: y2,
       };
     } else {
+      // if line drawn from right to left or
+      // bottom to top
       return {
         newX1: x2 ?? x1,
         newY1: y2 ?? y1,
@@ -226,4 +230,19 @@ export function getElementBoundingBox(element: Element, scale: number) {
       // Fallback for any unhandled types
       return { x1: 0, y1: 0, x2: 0, y2: 0, width: 0, height: 0 };
   }
+}
+
+export function drawHandle(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number
+) {
+  const handleSize = 10;
+  ctx.fillRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+  ctx.strokeRect(
+    x - handleSize / 2,
+    y - handleSize / 2,
+    handleSize,
+    handleSize
+  );
 }

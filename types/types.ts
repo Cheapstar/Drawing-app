@@ -84,6 +84,10 @@ export interface LineElement extends GeometricElement {
   type: "line";
   x2: number;
   y2: number;
+  angle?: number /* This will store the tan(Q) value 
+                                if(angle < 0) => obtuse 
+                                elseif(angle) => Infinity
+                                else => acute */;
 }
 
 // Text specific properties
@@ -108,25 +112,9 @@ export interface FreehandElement extends BaseElement {
   drawnShape?: Drawable;
 }
 
-// Ellipse specific properties
-export interface EllipseElement extends GeometricElement {
-  type: "ellipse";
-  x2: number;
-  y2: number;
-}
-
-// Arrow specific properties
-export interface ArrowElement extends GeometricElement {
-  type: "arrow";
-  x2: number;
-  y2: number;
-}
-
 // Union type of all possible elements
 export type Element =
   | RectangleElement
   | LineElement
   | TextElement
-  | FreehandElement
-  | EllipseElement
-  | ArrowElement;
+  | FreehandElement;

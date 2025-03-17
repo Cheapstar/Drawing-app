@@ -34,7 +34,7 @@ import {
   TextElement,
   Shapes,
 } from "@/types/types";
-import { useHistory } from "./utils/history";
+import { HistoryState, useHistory } from "./utils/history";
 import {
   point,
   positionOnRectangle,
@@ -42,6 +42,7 @@ import {
 } from "./utils/position";
 import {
   adjustElementCoordinates,
+  drawHandle,
   getElementBoundingBox,
 } from "./utils/elements";
 import { drawElement } from "./utils/draw";
@@ -108,6 +109,8 @@ export function WhiteBoard() {
   const boardRef = useRef<HTMLCanvasElement>(null);
   const textElementRef = useRef<HTMLTextAreaElement>(null);
 
+  const [drawingElement, setDrawingElement] = useState<Element | null>(null);
+
   // Focus textarea when writing text
   useEffect(() => {
     if (action === "writing" && textElementRef.current) {
@@ -156,7 +159,6 @@ export function WhiteBoard() {
   }, [tool]);
 
   // Draw the canvas
-  // Draw the canvas
   useLayoutEffect(() => {
     const canvas = boardRef.current;
     if (!canvas) return;
@@ -189,6 +191,10 @@ export function WhiteBoard() {
     );
     ctx.scale(scale, scale);
 
+    if (drawingElement) {
+      drawElement(rc, ctx, drawingElement);
+    }
+
     // Draw all elements
     elements.forEach((element: Element) => {
       if (selectedElement && element.id === selectedElement.id) {
@@ -200,28 +206,28 @@ export function WhiteBoard() {
 
     // Draw selection indicator
     if (selectedElement) {
-      const { x1, y1, width, height } = getElementBoundingBox(
-        selectedElement,
-        scale
-      );
+      const boundingBox = getElementBoundingBox(selectedElement, scale);
+      const { x1, y1, width, height } = boundingBox;
+
       ctx.save();
       ctx.lineWidth = getLineWidth(scale);
       ctx.strokeStyle = "#6965db";
       ctx.strokeRect(x1, y1, width, height);
+
+      // Draw control points
       ctx.fillStyle = "white";
-      ctx.fillRect(x1 - 5, y1 - 5, 10, 10);
-      ctx.strokeRect(x1 - 5, y1 - 5, 10, 10);
-      ctx.fillRect(x1 + width - 5, y1 - 5, 10, 10);
-      ctx.strokeRect(x1 + width - 5, y1 - 5, 10, 10);
-      ctx.fillRect(x1 - 5, y1 + height - 5, 10, 10);
-      ctx.strokeRect(x1 - 5, y1 + height - 5, 10, 10);
-      ctx.fillRect(x1 + width - 5, y1 + height - 5, 10, 10);
-      ctx.strokeRect(x1 + width - 5, y1 + height - 5, 10, 10);
+
+      // Corner handles
+      drawHandle(ctx, x1, y1);
+      drawHandle(ctx, x1 + width, y1);
+      drawHandle(ctx, x1, y1 + height);
+      drawHandle(ctx, x1 + width, y1 + height);
+
       ctx.restore();
     }
 
     ctx.restore();
-  }, [elements, selectedElement, panOffset, scale, action]);
+  }, [elements, selectedElement, panOffset, scale, action, drawingElement]);
 
   // Add a separate effect to update scaleOffset only when scale or canvas size changes
   useEffect(() => {
@@ -357,13 +363,21 @@ export function WhiteBoard() {
     // Select tool
     if (tool === "select") {
       // get the element with its selected Position
+      // First Let's go with Line
       const elementAtPosition = getElementAtPosition(
         clientX,
         clientY,
-        elements
+        elements,
+        scale
       );
 
       if (!elementAtPosition) return;
+
+      if (elementAtPosition.type === "line") {
+        console.log("Selected Line Element is ", elementAtPosition);
+        setSelectedElement(elementAtPosition as Element);
+        return;
+      }
 
       if (elementAtPosition && !selectedElement) {
         if (
@@ -483,10 +497,29 @@ export function WhiteBoard() {
 
     // Drawing tools (freehand, rectangle, line)
     if (tool === "freehand" || tool === "rectangle" || tool === "line") {
+      if (tool === "line") {
+        const newElement: LineElement = {
+          id: crypto.randomUUID(),
+          x1: clientX,
+          y1: clientY,
+          x2: clientX,
+          y2: clientY,
+          type: "line",
+          color,
+          strokeWidth,
+        };
+
+        setDrawingElement(newElement);
+        setAction("drawing");
+        setSelectedElement(null);
+
+        return;
+      }
+
       setAction("drawing");
       setSelectedElement(null);
 
-      if (tool === "rectangle" || tool === "line") {
+      if (tool === "rectangle") {
         const newElement: RectangleElement | LineElement = {
           id: crypto.randomUUID(),
           x1: clientX,
@@ -600,6 +633,15 @@ export function WhiteBoard() {
 
     // Handle drawing
     if (action === "drawing") {
+      if (tool === "line") {
+        setDrawingElement({
+          ...(drawingElement as LineElement),
+          x2: clientX,
+          y2: clientY,
+        });
+        return;
+      }
+
       const lastIndex = elements.length - 1;
       if (lastIndex < 0) return;
 
@@ -618,7 +660,7 @@ export function WhiteBoard() {
           id: currentElement.id,
           stroke: newStroke,
         });
-      } else if (tool === "rectangle" || tool === "line") {
+      } else if (tool === "rectangle") {
         updateElement(lastIndex, {
           id: currentElement.id,
           x2: clientX,
@@ -636,6 +678,7 @@ export function WhiteBoard() {
         (element) => selectedElement.id === element.id
       );
 
+      // Safety Check
       if (index === -1) return;
 
       const { selectedPosition } = selectedElement;
@@ -887,6 +930,33 @@ export function WhiteBoard() {
 
     // Finalize drawing
     if (action === "drawing") {
+      if (tool === "line") {
+        const { x1, y1, x2, y2, type } = drawingElement as LineElement;
+        const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
+          type as Shapes,
+          x1,
+          y1,
+          x2,
+          y2
+        );
+
+        setElements([
+          ...elements,
+          {
+            ...drawingElement,
+            ...{
+              x1: newX1,
+              y1: newY1,
+              x2: newX2,
+              y2: newY2,
+            },
+          },
+        ] as HistoryState);
+        setAction("none");
+        setDrawingElement(null);
+        return;
+      }
+
       const lastIndex = elements.length - 1;
       if (lastIndex < 0) return;
 
