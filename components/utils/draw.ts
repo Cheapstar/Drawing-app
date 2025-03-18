@@ -1,7 +1,7 @@
 import { RoughCanvas } from "roughjs/bin/canvas";
 import { Element } from "@/types/types";
 import { Drawable } from "roughjs/bin/core";
-import { createFreeHand, createLine, createRectangle } from "./elements";
+import { createFreeHand, createRectangle } from "./elements";
 
 export const drawElement = (
   roughCanvas: RoughCanvas,
@@ -12,11 +12,26 @@ export const drawElement = (
     case "line":
       ctx.save();
 
-      const line = createLine(element);
+      ctx.beginPath();
+      ctx.moveTo(element.x1, element.y1);
+
+      if (element.controlPoint) {
+        ctx.quadraticCurveTo(
+          element.controlPoint.x,
+          element.controlPoint.y,
+          element.x2,
+          element.y2
+        );
+      } else {
+        const midX = (element.x1 + element.x2) / 2;
+        const midY = (element.y1 + element.y2) / 2;
+        ctx.quadraticCurveTo(midX, midY, element.x2, element.y2);
+      }
       if (element.opacity) {
         ctx.globalAlpha = element.opacity;
       }
-      roughCanvas.draw(line as Drawable);
+
+      ctx.stroke();
       ctx.restore();
 
       break;

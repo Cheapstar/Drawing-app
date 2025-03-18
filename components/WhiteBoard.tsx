@@ -33,17 +33,26 @@ import {
   LineElement,
   TextElement,
   Shapes,
+  SelectedPosition,
+  BoundingElement,
 } from "@/types/types";
 import { HistoryState, useHistory } from "./utils/history";
 import {
   point,
   positionOnRectangle,
   getElementAtPosition,
+  nearPoint,
+  quadraticBezierMidpoint,
+  getNewControlPoints,
+  getPositionOnBoundingBox,
 } from "./utils/position";
 import {
   adjustElementCoordinates,
+  drawAnchorPoints,
+  drawCurveBoundingBox,
   drawHandle,
   getElementBoundingBox,
+  getTheBoundingBox,
 } from "./utils/elements";
 import { drawElement } from "./utils/draw";
 
@@ -67,15 +76,6 @@ const updateEachStroke = (
 
   return newStrokes;
 };
-
-interface BoundingElement {
-  x1: number;
-  x2: number;
-  y1: number;
-  y2: number;
-  width: number;
-  height: number;
-}
 
 type CursorAction =
   | "vertical"
@@ -205,29 +205,44 @@ export function WhiteBoard() {
     });
 
     // Draw selection indicator
-    if (selectedElement) {
-      const boundingBox = getElementBoundingBox(selectedElement, scale);
-      const { x1, y1, width, height } = boundingBox;
+    if (boundingElement && selectedElement) {
+      const { x1, y1, width, height, type } = boundingElement;
 
       ctx.save();
-      ctx.lineWidth = getLineWidth(scale);
-      ctx.strokeStyle = "#6965db";
-      ctx.strokeRect(x1, y1, width, height);
 
-      // Draw control points
-      ctx.fillStyle = "white";
+      if (type === "line") {
+        const line = selectedElement as LineElement;
+        drawAnchorPoints(ctx, line, scale);
+        if (line.isCurved) {
+          drawCurveBoundingBox(ctx, line, scale);
+        }
+      } else {
+        ctx.lineWidth = getLineWidth(scale);
+        ctx.strokeStyle = "#6965db";
+        ctx.strokeRect(x1, y1, width, height);
 
-      // Corner handles
-      drawHandle(ctx, x1, y1);
-      drawHandle(ctx, x1 + width, y1);
-      drawHandle(ctx, x1, y1 + height);
-      drawHandle(ctx, x1 + width, y1 + height);
+        // Draw control points
+        ctx.fillStyle = "white";
 
+        // Corner handles
+        drawHandle(ctx, x1, y1);
+        drawHandle(ctx, x1 + width, y1);
+        drawHandle(ctx, x1, y1 + height);
+        drawHandle(ctx, x1 + width, y1 + height);
+      }
       ctx.restore();
     }
 
     ctx.restore();
-  }, [elements, selectedElement, panOffset, scale, action, drawingElement]);
+  }, [
+    elements,
+    selectedElement,
+    panOffset,
+    scale,
+    action,
+    drawingElement,
+    boundingElement,
+  ]);
 
   // Add a separate effect to update scaleOffset only when scale or canvas size changes
   useEffect(() => {
@@ -373,106 +388,136 @@ export function WhiteBoard() {
 
       if (!elementAtPosition) return;
 
-      if (elementAtPosition.type === "line") {
-        console.log("Selected Line Element is ", elementAtPosition);
-        setSelectedElement(elementAtPosition as Element);
-        return;
-      }
+      // Here Hame dekhna hai Agar Element Selected hai and Agar Nahi Hai
+      // Based on that we will proceed in different Direction
 
-      if (elementAtPosition && !selectedElement) {
-        if (
-          elementAtPosition.type === "rectangle" &&
-          elementAtPosition.selectedPosition === "inside"
-        )
+      // When click is on the selected Ekement
+      if (selectedElement && elementAtPosition.id === selectedElement.id) {
+        // If Program reaches this block this does tell us that cursor is on the selectedElement
+
+        // Check the Element Type
+        if (selectedElement.type === "line") {
+          // We Need To check is it on the corners or on the middle or else where
+
+          const midX = (selectedElement.x1 + selectedElement.x2) / 2;
+          const midY = (selectedElement.y1 + selectedElement.y2) / 2;
+
+          //check corners
+          const onStart = nearPoint(
+            boundingElement.x1,
+            boundingElement.y1,
+            clientX,
+            clientY
+          )
+            ? "start"
+            : null;
+
+          const onEnd = nearPoint(
+            boundingElement.x2,
+            boundingElement.y2,
+            clientX,
+            clientY
+          )
+            ? "end"
+            : null;
+
+          const midPoints = quadraticBezierMidpoint(selectedElement);
+          const onMiddle = nearPoint(midPoints.x, midPoints.y, clientX, clientY)
+            ? "middle"
+            : null;
+
+          // Only one of them will be true
+          const result = onStart || onEnd || onMiddle;
+
+          if (result) {
+            setSelectedElement({
+              ...selectedElement,
+              isSelected: true,
+              selectedPosition: result as SelectedPosition,
+            });
+
+            setAction("resizing");
+          } else {
+            // We Need Offsets to determine where the use has clicked to determine the
+            // moving position
+            let offset: {
+              x: number[];
+              y: number[];
+            } = { x: [], y: [] };
+
+            offset = getTheOffsets(selectedElement, point(clientX, clientY));
+
+            setSelectedElement({
+              ...(selectedElement as Element),
+              isSelected: true,
+              offsetX: offset.x,
+              offsetY: offset.y,
+              selectedPosition: "on" as SelectedPosition,
+            });
+
+            setAction("moving");
+          }
+
           return;
+        }
+      } else if (selectedElement) {
+        // check if it is inside the bounding zone
+        // This runs when click is on the bounding box not on the selectedElement
 
-        let offset: {
-          x: number[];
-          y: number[];
-        } = { x: [], y: [] };
-
-        const fullElement = elements.find(
-          (el) => el.id === elementAtPosition.id
-        );
-        if (!fullElement) return;
-
-        offset = getTheOffsets(
-          elementAtPosition as Element,
+        const boundingBox = getTheBoundingBox(selectedElement, scale);
+        const posOnBoundingBox = getPositionOnBoundingBox(
+          boundingBox as BoundingElement,
           point(clientX, clientY)
         );
 
-        setSelectedElement({
-          ...(fullElement as Element),
-          offsetX: offset.x,
-          offsetY: offset.y,
-          selectedPosition: elementAtPosition.selectedPosition,
-        });
+        // if client is on Bounding Box then we need to do something
+        console.log("Position inside bounding box is", posOnBoundingBox);
+        // Based on its position
+        if (posOnBoundingBox) {
+          if (posOnBoundingBox === "inside") {
+            // get the offset for moving
+            const offset = getTheOffsets(
+              selectedElement,
+              point(clientX, clientY)
+            );
+            setBoundingElement({
+              ...boundingBox,
+              selectedPosition: posOnBoundingBox,
+              offsetX: offset.x,
+              offsetY: offset.y,
+              isSelected: true,
+            } as BoundingElement);
 
-        setBoundingElement(getElementBoundingBox(fullElement, scale));
-        setAction("moving");
-        console.log("Selected Element is v3", {
-          ...(fullElement as Element),
-          offsetX: offset.x,
-          offsetY: offset.y,
-          selectedPosition: elementAtPosition.selectedPosition,
-        });
-      } else if (selectedElement) {
-        // Check if click is in the highlighted selection zone
-        console.log("Selected Position is", selectedElement.selectedPosition);
-
-        const boundingBox = getElementBoundingBox(
-          { ...selectedElement },
-          scale
-        );
-        const isInside = positionOnRectangle(
-          clientX,
-          clientY,
-          boundingBox.x1,
-          boundingBox.y1,
-          boundingBox.x2 !== undefined ? boundingBox.x2 : boundingBox.x1,
-          boundingBox.y2 !== undefined ? boundingBox.y2 : boundingBox.y1
-        );
-
-        if (!isInside) {
-          setSelectedElement(null);
-          setAction("selecting");
-        } else if (isInside === "inside") {
-          let offset: {
-            x: number[];
-            y: number[];
-          } = { x: [], y: [] };
-
-          offset = getTheOffsets(
-            { ...selectedElement },
-            point(clientX, clientY)
-          );
-
-          setSelectedElement({
-            ...selectedElement,
-            offsetX: offset.x,
-            offsetY: offset.y,
-            selectedPosition: isInside,
-          });
-
-          setBoundingElement(
-            getElementBoundingBox({ ...selectedElement }, scale)
-          );
-          setAction("moving");
-          console.log("Selected Element is v1", selectedElement);
-        } else {
-          console.log("Selected Element is v2", selectedElement);
-
-          setSelectedElement({
-            ...selectedElement,
-            selectedPosition: isInside,
-          });
-          setBoundingElement(
-            getElementBoundingBox({ ...selectedElement }, scale)
-          );
-
-          setAction("resizing");
+            setSelectedElement({
+              ...selectedElement,
+              isSelected: false,
+            });
+            setAction("moving");
+            return;
+          } else {
+            setBoundingElement({
+              ...boundingBox,
+              selectedPosition: posOnBoundingBox,
+            } as BoundingElement);
+            setAction("resizing");
+            return;
+          }
         }
       }
+
+      if (elementAtPosition.type === "line") {
+        console.log("Selected Line Element is ", elementAtPosition);
+        setSelectedElement({
+          ...elementAtPosition,
+          isSelected: true,
+        } as Element);
+        setBoundingElement({
+          ...elementAtPosition,
+          isSelected: false,
+        } as BoundingElement);
+        return;
+      }
+
       return;
     }
 
@@ -507,6 +552,7 @@ export function WhiteBoard() {
           type: "line",
           color,
           strokeWidth,
+          isCurved: false,
         };
 
         setDrawingElement(newElement);
@@ -552,64 +598,25 @@ export function WhiteBoard() {
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     let { x: clientX, y: clientY } = getMouseCoordinates(event);
 
-    console.log("Current State is", tool);
-
     // Handle moving elements
-    if (action === "moving" && selectedElement) {
-      console.log("Moving");
-      const index = elements.findIndex(
-        (element) => selectedElement.id === element.id
-      );
-      if (index === -1) return;
+    if (action === "moving" && selectedElement && boundingElement) {
+      console.log("Action is equal to moving");
 
-      const element = elements[index];
-      const { offsetX, offsetY } = selectedElement;
+      // All for line
+      if (selectedElement.type === "line" && selectedElement.isSelected) {
+        const { x1, y1, x2, y2, offsetX, offsetY, controlPoint } =
+          selectedElement as LineElement;
 
-      if (!offsetX || !offsetY) return;
-
-      if (element.type === "freehand") {
-        const freehandElement = element as FreehandElement;
-        const newStrokes = updateEachStroke(
-          freehandElement.stroke,
-          clientX,
-          clientY,
-          offsetX,
-          offsetY
-        );
-
-        if (!newStrokes) return;
-
-        setSelectedElement({
-          ...selectedElement,
-          x1: 0,
-          y1: 0,
-          stroke: [...newStrokes],
-        });
-
-        setBoundingElement(
-          getElementBoundingBox(
-            {
-              ...selectedElement,
-
-              stroke: [...newStrokes],
-            },
-            scale
-          )
-        );
-      } else {
-        // For rectangle, line, and text elements
-        const x2 = element.x2 !== undefined ? element.x2 : element.x1;
-        const y2 = element.y2 !== undefined ? element.y2 : element.y1;
-
-        const width = x2 - element.x1;
-        const height = y2 - element.y1;
-
-        const newX1 = clientX - offsetX[0];
-        const newY1 = clientY - offsetY[0];
+        const width = x2 - x1;
+        const height = y2 - y1;
+        const newX1 = clientX - (offsetX as number[])[0];
+        const newY1 = clientY - (offsetY as number[])[0];
         const newX2 = newX1 + width;
         const newY2 = newY1 + height;
-
-        const padding = 15 * scale;
+        const newControlPoint = {
+          x: controlPoint.x + newX1 - x1,
+          y: controlPoint.y + newY1 - y1,
+        };
 
         setSelectedElement({
           ...selectedElement,
@@ -617,18 +624,51 @@ export function WhiteBoard() {
           y1: newY1,
           x2: newX2,
           y2: newY2,
+          controlPoint: newControlPoint,
+        });
+        setBoundingElement({
+          ...boundingElement,
+          x1: newX1,
+          y1: newY1,
+          x2: newX2,
+          y2: newY2,
         });
 
+        return;
+      } else if (
+        boundingElement.type === "line" &&
+        boundingElement.isSelected
+      ) {
+        const { x1, y1, x2, y2, controlPoint } = selectedElement as LineElement;
+        const { offsetX, offsetY } = boundingElement;
+
+        const width = x2 - x1;
+        const height = y2 - y1;
+        const newX1 = clientX - (offsetX as number[])[0];
+        const newY1 = clientY - (offsetY as number[])[0];
+        const newX2 = newX1 + width;
+        const newY2 = newY1 + height;
+        const newControlPoint = {
+          x: controlPoint.x + newX1 - x1,
+          y: controlPoint.y + newY1 - y1,
+        };
+
+        setSelectedElement({
+          ...selectedElement,
+          x1: newX1,
+          y1: newY1,
+          x2: newX2,
+          y2: newY2,
+          controlPoint: newControlPoint,
+        });
         setBoundingElement({
-          x1: newX1 - padding,
-          y1: newY1 - padding,
-          x2: newX2 + padding,
-          y2: newY2 + padding,
-          height: Math.abs(newY2 - newY1) + 2 * padding,
-          width: Math.abs(newX2 - newX1) + 2 * padding,
+          ...boundingElement,
+          x1: newX1,
+          y1: newY1,
+          x2: newX2,
+          y2: newY2,
         });
       }
-      return;
     }
 
     // Handle drawing
@@ -673,6 +713,72 @@ export function WhiteBoard() {
     // Handle resizing elements
     if (action === "resizing" && selectedElement) {
       if (selectedElement.type === "text") return;
+
+      if (selectedElement.type === "line" && selectedElement.isSelected) {
+        // console.log("Line is resizing");
+
+        if (selectedElement?.selectedPosition === "start") {
+          // Here we need to update the x1,y1
+
+          setSelectedElement({
+            ...selectedElement,
+            x1: clientX,
+            y1: clientY,
+            controlPoint: {
+              x: selectedElement.isCurved
+                ? (selectedElement.controlPoint as Point).x
+                : (selectedElement.x1 + selectedElement.x2) / 2,
+              y: selectedElement.isCurved
+                ? (selectedElement.controlPoint as Point).y
+                : (selectedElement.y1 + selectedElement.y2) / 2,
+            },
+          });
+
+          setBoundingElement({
+            ...boundingElement,
+            x1: clientX,
+            y1: clientY,
+          });
+        } else if (selectedElement?.selectedPosition === "end") {
+          // Here we need to update the x1,y1
+          setSelectedElement({
+            ...selectedElement,
+            x2: clientX,
+            y2: clientY,
+            controlPoint: {
+              x: selectedElement.isCurved
+                ? (selectedElement.controlPoint as Point).x
+                : (selectedElement.x1 + selectedElement.x2) / 2,
+              y: selectedElement.isCurved
+                ? (selectedElement.controlPoint as Point).y
+                : (selectedElement.y1 + selectedElement.y2) / 2,
+            },
+          });
+
+          setBoundingElement({
+            ...(boundingElement as BoundingElement),
+            x2: clientX,
+            y2: clientY,
+          });
+        } else {
+          console.log("SelectedPosition is", boundingElement?.selectedPosition);
+          const newControlPoints = getNewControlPoints(
+            selectedElement,
+            point(clientX, clientY)
+          );
+          setSelectedElement({
+            ...selectedElement,
+            controlPoint: newControlPoints,
+            isCurved: true,
+          });
+
+          setBoundingElement({
+            ...(boundingElement as BoundingElement),
+          });
+        }
+
+        return;
+      }
 
       const index = elements.findIndex(
         (element) => selectedElement.id === element.id
@@ -863,42 +969,42 @@ export function WhiteBoard() {
     }
 
     // cursor
-    if (selectedElement && boundingElement) {
-      const positionOnElement = positionOnRectangle(
-        clientX,
-        clientY,
-        boundingElement.x1,
-        boundingElement.y1,
-        boundingElement.x2,
-        boundingElement.y2
-      );
+    // if (selectedElement && boundingElement) {
+    //   const positionOnElement = positionOnRectangle(
+    //     clientX,
+    //     clientY,
+    //     boundingElement.x1,
+    //     boundingElement.y1,
+    //     boundingElement.x2,
+    //     boundingElement.y2
+    //   );
 
-      switch (positionOnElement) {
-        case "b":
-        case "t":
-          setCursorAction("vertical");
-          break;
-        case "l":
-        case "r":
-          setCursorAction("horizontal");
-          break;
-        case "bl":
-        case "tr":
-          setCursorAction("acute");
-          break;
-        case "br":
-        case "tl":
-          setCursorAction("obtuse");
-          break;
-        case "inside":
-          setCursorAction("inside");
-          break;
+    //   switch (positionOnElement) {
+    //     case "b":
+    //     case "t":
+    //       setCursorAction("vertical");
+    //       break;
+    //     case "l":
+    //     case "r":
+    //       setCursorAction("horizontal");
+    //       break;
+    //     case "bl":
+    //     case "tr":
+    //       setCursorAction("acute");
+    //       break;
+    //     case "br":
+    //     case "tl":
+    //       setCursorAction("obtuse");
+    //       break;
+    //     case "inside":
+    //       setCursorAction("inside");
+    //       break;
 
-        default:
-          setCursorAction("none");
-          break;
-      }
-    }
+    //     default:
+    //       setCursorAction("none");
+    //       break;
+    //   }
+    // }
   };
 
   // Handler for pointer up events
@@ -949,6 +1055,10 @@ export function WhiteBoard() {
               y1: newY1,
               x2: newX2,
               y2: newY2,
+              controlPoint: {
+                x: (newX1 + newX2) / 2,
+                y: (newY1 + newY2) / 2,
+              },
             },
           },
         ] as HistoryState);
@@ -1019,10 +1129,16 @@ export function WhiteBoard() {
           x2: newX2,
           y2: newY2,
         });
+
+        setBoundingElement({
+          ...(boundingElement as BoundingElement),
+          x1: newX1,
+          y1: newY1,
+          x2: newX2,
+          y2: newY2,
+        });
         // Update the elements state
         setElements(updatedElements);
-
-        // Clear the bounding element
       }
       setAction("none");
       return;

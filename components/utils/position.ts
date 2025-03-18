@@ -1,4 +1,5 @@
 import { Point, SelectedPosition, Element, LineElement } from "@/types/types";
+import { BoundingElement } from "../WhiteBoard";
 
 export const getElementAtPosition = (
   clientX: number,
@@ -48,7 +49,7 @@ export const nearPoint = (
   x2: number,
   y2: number
 ): boolean => {
-  return Math.abs(x2 - x1) < 10 && Math.abs(y2 - y1) < 10;
+  return Math.abs(x2 - x1) < 5 && Math.abs(y2 - y1) < 5;
 };
 
 export const positionOnPencil = (client: Point, stroke?: number[][]) => {
@@ -139,7 +140,159 @@ export const distance = (a: Point, b: Point): number => {
 
 export const point = (x: number, y: number): Point => ({ x, y });
 
-export const positionOnLine = (
+function positionOnLine(client: Point, element: LineElement, scale: number) {
+  const halfStroke = (element.strokeWidth as number) / (2 * scale);
+
+  for (let t = 0; t <= 1; t += 0.01) {
+    // Iterate over `t` values
+    const bx =
+      (1 - t) * (1 - t) * element.x1 +
+      2 * (1 - t) * t * element.controlPoint.x +
+      t * t * element.x2;
+    const by =
+      (1 - t) * (1 - t) * element.y1 +
+      2 * (1 - t) * t * element.controlPoint.y +
+      t * t * element.y2;
+
+    if (
+      Math.abs(bx - client.x) < halfStroke &&
+      Math.abs(by - client.y) < halfStroke
+    ) {
+      return true; // Point is on the curve
+    }
+  }
+  return false;
+}
+
+export function quadraticBezierMidpoint(element: LineElement) {
+  const mx =
+    0.25 * element.x1 +
+    0.5 * (element.controlPoint as Point).x +
+    0.25 * element.x2;
+  const my =
+    0.25 * element.y1 +
+    0.5 * (element.controlPoint as Point).y +
+    0.25 * element.y2;
+  return { x: mx, y: my };
+}
+
+export function getNewControlPoints(element: LineElement, client: Point) {
+  const { x1, y1, x2, y2 } = element;
+  const { x, y } = client;
+
+  return {
+    x: 2 * (x - 0.25 * x1 - 0.25 * x2),
+    y: 2 * (y - 0.25 * y1 - 0.25 * y2),
+  };
+}
+
+export function getPositionOnBoundingBox(
+  boundingBox: BoundingElement,
+  client: Point
+) {
+  if (!boundingBox) return "none";
+
+  if (boundingBox.type === "line") {
+    const { x1, x2, y1, y2, padding, strokeWidth } = boundingBox;
+
+    // Checking on the corners
+    const topLeft = nearPoint(x1 - padding, y1 - padding, client.x, client.y)
+      ? "tl"
+      : null;
+    const bottomLeft = nearPoint(x1 - padding, y2 + padding, client.x, client.y)
+      ? "bl"
+      : null;
+    const topRight = nearPoint(x2 + padding, y1 - padding, client.x, client.y)
+      ? "tr"
+      : null;
+    const bottomRight = nearPoint(
+      x2 + padding,
+      y2 + padding,
+      client.x,
+      client.y
+    )
+      ? "br"
+      : null;
+
+    // Checking on the edges
+    const top =
+      client.x >= x1 &&
+      client.x <= x2 &&
+      Math.abs(y1 - client.y) <= (strokeWidth as number)
+        ? "t"
+        : null;
+    const left =
+      client.y >= y1 &&
+      client.y <= y2 &&
+      Math.abs(x1 - client.x) <= (strokeWidth as number)
+        ? "l"
+        : null;
+    const right =
+      client.y >= y1 &&
+      client.y <= y2 &&
+      Math.abs(x2 - client.x) <= (strokeWidth as number)
+        ? "r"
+        : null;
+    const bottom =
+      client.x >= x1 &&
+      client.x <= x2 &&
+      Math.abs(y2 - client.y) <= (strokeWidth as number)
+        ? "b"
+        : null;
+
+    // Check if point is inside the bounding box
+    const inside =
+      client.x > x1 && client.x < x2 && client.y > y1 && client.y < y2
+        ? "inside"
+        : null;
+
+    return (
+      topLeft ||
+      bottomLeft ||
+      topRight ||
+      bottomRight ||
+      top ||
+      left ||
+      right ||
+      bottom ||
+      inside ||
+      "none"
+    );
+  }
+
+  return "none";
+}
+
+/* 
+First Thing yaha pe jo check karenge would be - has client clicked on any of the given Shape : 
+
+-- We will check kya koi element cover the point clicked 
+-- We need to go through each and every element and check it
+
+1. Line :
+-- Line ke liye 2 things we need to consider - Points and stroke width 
+-- Points being (x1,y1) -- (x2,y2) and stroke width jo bhi ho
+-- 
+
+*/
+
+//  export const positionOnLine = (
+//    clientPoint: Point,
+//    a: Point,
+//    b: Point
+//  ): SelectedPosition => {
+//    const offset =
+//      distance(a, b) - distance(a, clientPoint) - distance(b, clientPoint);
+//    const inside = Math.abs(offset) < 1 ? "inside" : null;
+
+//    const start = nearPoint(clientPoint.x, clientPoint.y, a.x, a.y)
+//      ? "start"
+//      : null;
+//    const end = nearPoint(clientPoint.x, clientPoint.y, b.x, b.y) ? "end" : null;
+//    return inside || start || end;
+//  };
+
+export const positionOnine = (
   client: Point,
   element: LineElement,
   scale: number
@@ -169,8 +322,6 @@ export const positionOnLine = (
     return client.y >= y1 - halfStroke && client.y <= y1 + halfStroke;
   }
 
-  console.log("Perpendicular case is running");
-
   // Calculate perpendicular distance
   const perpDistance = getPerpendicularDistance(client, element) / scale;
   return perpDistance <= halfStroke;
@@ -190,32 +341,3 @@ export const getPerpendicularDistance = (
 
   return numerator / denominator;
 };
-
-/* 
-First Thing yaha pe jo check karenge would be - has client clicked on any of the given Shape : 
-
--- We will check kya koi element cover the point clicked 
-    -- We need to go through each and every element and check it
-    
-    1. Line :
-    -- Line ke liye 2 things we need to consider - Points and stroke width 
-    -- Points being (x1,y1) -- (x2,y2) and stroke width jo bhi ho
-    -- 
-    
-    */
-
-//  export const positionOnLine = (
-//    clientPoint: Point,
-//    a: Point,
-//    b: Point
-//  ): SelectedPosition => {
-//    const offset =
-//      distance(a, b) - distance(a, clientPoint) - distance(b, clientPoint);
-//    const inside = Math.abs(offset) < 1 ? "inside" : null;
-
-//    const start = nearPoint(clientPoint.x, clientPoint.y, a.x, a.y)
-//      ? "start"
-//      : null;
-//    const end = nearPoint(clientPoint.x, clientPoint.y, b.x, b.y) ? "end" : null;
-//    return inside || start || end;
-//  };

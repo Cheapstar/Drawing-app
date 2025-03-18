@@ -61,6 +61,21 @@ export interface BaseElement {
   selectedPosition?: SelectedPosition;
   offsetX?: number[];
   offsetY?: number[];
+  isSelected?: boolean;
+}
+
+export interface BoundingElement {
+  type: Shapes;
+  x1: number;
+  x2: number;
+  y1: number;
+  y2: number;
+  padding: number;
+  selectedPosition?: SelectedPosition;
+  strokeWidth?: number;
+  offsetX?: number[];
+  offsetY?: number[];
+  isSelected?: boolean;
 }
 
 // Common properties for elements with x1, y1, x2, y2 coordinates
@@ -88,6 +103,8 @@ export interface LineElement extends GeometricElement {
                                 if(angle < 0) => obtuse 
                                 elseif(angle) => Infinity
                                 else => acute */;
+  isCurved: boolean;
+  controlPoint?: Point;
 }
 
 // Text specific properties
