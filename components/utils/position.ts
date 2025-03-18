@@ -193,8 +193,9 @@ export function getPositionOnBoundingBox(
   if (!boundingBox) return "none";
 
   if (boundingBox.type === "line") {
-    const { x1, x2, y1, y2, padding, strokeWidth } = boundingBox;
+    const { x1, x2, y1, y2, padding } = boundingBox;
 
+    const strokeWidth = 4;
     // Checking on the corners
     const topLeft = nearPoint(x1 - padding, y1 - padding, client.x, client.y)
       ? "tl"

@@ -96,46 +96,49 @@ export const createFreeHand = (element: FreehandElement) => {
   return path;
 };
 
-export const adjustElementCoordinates = (
-  type: Shapes,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number
-): { newX1: number; newY1: number; newX2: number; newY2: number } => {
-  if (type === "rectangle") {
-    const MinX = Math.min(x1 ?? 0, x2 ?? 0);
-    const MaxX = Math.max(x1 ?? 0, x2 ?? 0);
-    const MinY = Math.min(y1 ?? 0, y2 ?? 0);
-    const MaxY = Math.max(y1 ?? 0, y2 ?? 0);
+export const adjustElementCoordinates = (element: Element) => {
+  const { type } = element;
+  if (type === "line") {
+    const { x1, x2, y1, y2, isCurved } = element as LineElement;
 
-    return {
-      newX1: MinX,
-      newY1: MinY,
-      newX2: MaxX,
-      newY2: MaxY,
-    };
-  } else {
-    // When line is drawn from left to right or
-    // from top to bottom and it is vertical
-    if (x1 < x2 || (x2 === x1 && y2 < y1)) {
+    // For straight lines
+    if (!isCurved) {
+      // When line is drawn from left to right or
+      // from top to bottom and it is vertical
+      if (x1 < x2 || (x2 === x1 && y1 < y2)) {
+        return {
+          newX1: x1,
+          newY1: y1,
+          newX2: x2,
+          newY2: y2,
+        };
+      } else {
+        // if line drawn from right to left or
+        // bottom to top
+        return {
+          newX1: x2,
+          newY1: y2,
+          newX2: x1,
+          newY2: y1,
+        };
+      }
+    }
+    // For curved lines (quadratic bezier)
+    else {
+      // y jiska chota hoga wo upar
+      const newY1 = Math.min(y1, y2);
+      const newY2 = Math.max(y1, y2);
       return {
-        newX1: x1,
-        newY1: y1,
-        newX2: x2,
-        newY2: y2,
-      };
-    } else {
-      // if line drawn from right to left or
-      // bottom to top
-      return {
-        newX1: x2 ?? x1,
-        newY1: y2 ?? y1,
-        newX2: x1,
-        newY2: y1,
+        newX1: y1 < y2 ? x1 : x2,
+        newY1: newY1,
+        newX2: y1 < y2 ? x2 : x1,
+        newY2: newY2,
       };
     }
   }
+
+  // Return the original element if it's not a line
+  return element;
 };
 
 export function scaleStroke(

@@ -460,7 +460,7 @@ export function WhiteBoard() {
 
           return;
         }
-      } else if (selectedElement) {
+      } else if (selectedElement?.type === "line" && selectedElement.isCurved) {
         // check if it is inside the bounding zone
         // This runs when click is on the bounding box not on the selectedElement
 
@@ -471,9 +471,9 @@ export function WhiteBoard() {
         );
 
         // if client is on Bounding Box then we need to do something
-        console.log("Position inside bounding box is", posOnBoundingBox);
+        console.log("Element inside Bounding Box is", selectedElement);
         // Based on its position
-        if (posOnBoundingBox) {
+        if (posOnBoundingBox != "none") {
           if (posOnBoundingBox === "inside") {
             // get the offset for moving
             const offset = getTheOffsets(
@@ -491,6 +491,7 @@ export function WhiteBoard() {
             setSelectedElement({
               ...selectedElement,
               isSelected: false,
+              selectedPosition: null,
             });
             setAction("moving");
             return;
@@ -498,7 +499,13 @@ export function WhiteBoard() {
             setBoundingElement({
               ...boundingBox,
               selectedPosition: posOnBoundingBox,
+              isSelected: true,
             } as BoundingElement);
+            setSelectedElement({
+              ...selectedElement,
+              isSelected: false,
+              selectedPosition: null,
+            });
             setAction("resizing");
             return;
           }
@@ -714,6 +721,7 @@ export function WhiteBoard() {
     if (action === "resizing" && selectedElement) {
       if (selectedElement.type === "text") return;
 
+      // All for line
       if (selectedElement.type === "line" && selectedElement.isSelected) {
         // console.log("Line is resizing");
 
@@ -778,161 +786,306 @@ export function WhiteBoard() {
         }
 
         return;
-      }
-
-      const index = elements.findIndex(
-        (element) => selectedElement.id === element.id
-      );
-
-      // Safety Check
-      if (index === -1) return;
-
-      const { selectedPosition } = selectedElement;
-      if (!selectedPosition) return;
-
-      // First get proper bounding box from the helper function
-      const originalBoundingBox = selectedElement;
-
-      console.log("Selected Element is V5", selectedElement);
-
-      const { height: Bheight, width: Bwidth } = getElementBoundingBox(
-        { ...selectedElement },
-        scale
-      );
-      // Then normalize it correctly
-      const padding = 15 * scale;
-      const boundingBox = {
-        x1: originalBoundingBox.x1,
-        y1: originalBoundingBox.y1,
-        x2:
-          selectedElement.type != "freehand"
-            ? originalBoundingBox.x2
-            : originalBoundingBox.x1 + Bwidth - 2 * padding,
-        y2:
-          selectedElement.type != "freehand"
-            ? originalBoundingBox.y2
-            : originalBoundingBox.y1 + Bheight - 2 * padding,
-        width: Bwidth - 2 * padding,
-        height: Bheight - 2 * padding,
-      };
-
-      // Fixed issue: Initialize newX1, newY1, newX2, newY2 with original box values
-      let newX1 = boundingBox.x1;
-      let newY1 = boundingBox.y1;
-      let newX2 = boundingBox.x2;
-      let newY2 = boundingBox.y2;
-
-      // Initialize scaling and reference points
-      let scaleX = 1,
-        scaleY = 1;
-      let referenceX = boundingBox.x1,
-        referenceY = boundingBox.y1;
-      const width = boundingBox.width;
-      const height = boundingBox.height;
-
-      console.log("BoundingBox is ", referenceX, referenceY);
-
-      // Calculate new dimensions based on resize handle position
-      switch (selectedPosition) {
-        case "b":
-          newY2 = clientY - padding;
-          scaleY = height !== 0 ? (newY2 - boundingBox.y1) / height : 1;
-          referenceY = boundingBox.y1;
-          break;
-        case "t":
-          newY1 = clientY + padding;
-          scaleY = height !== 0 ? (boundingBox.y2 - newY1) / height : 1;
-          referenceY = boundingBox.y2;
-          break;
-        case "l":
-          newX1 = clientX + padding;
-          scaleX = width !== 0 ? (boundingBox.x2 - newX1) / width : 1;
-          referenceX = boundingBox.x2;
-          break;
-        case "r":
-          newX2 = clientX - padding;
-          scaleX = width !== 0 ? (newX2 - boundingBox.x1) / width : 1;
-          referenceX = boundingBox.x1;
-          break;
-        case "start":
-        case "tl":
-          newX1 = clientX + padding;
-          newY1 = clientY + padding;
-          scaleX = width !== 0 ? (boundingBox.x2 - newX1) / width : 1;
-          scaleY = height !== 0 ? (boundingBox.y2 - newY1) / height : 1;
-          referenceX = boundingBox.x2;
-          referenceY = boundingBox.y2;
-          break;
-        case "tr":
-          newX2 = clientX - padding;
-          newY1 = clientY + padding;
-          scaleX = width !== 0 ? (newX2 - boundingBox.x1) / width : 1;
-          scaleY = height !== 0 ? (boundingBox.y2 - newY1) / height : 1;
-          referenceX = boundingBox.x1;
-          referenceY = boundingBox.y2;
-          break;
-        case "bl":
-          newX1 = clientX + padding;
-          newY2 = clientY - padding;
-          scaleX = width !== 0 ? (boundingBox.x2 - newX1) / width : 1;
-          scaleY = height !== 0 ? (newY2 - boundingBox.y1) / height : 1;
-          referenceX = boundingBox.x2;
-          referenceY = boundingBox.y1;
-          break;
-        case "end":
-        case "br":
-          newX2 = clientX - padding;
-          newY2 = clientY - padding;
-          scaleX = width !== 0 ? (newX2 - boundingBox.x1) / width : 1;
-          scaleY = height !== 0 ? (newY2 - boundingBox.y1) / height : 1;
-          referenceX = boundingBox.x1;
-          referenceY = boundingBox.y1;
-          break;
-      }
-
-      // Apply updates based on element type
-      if (selectedElement.type === "freehand") {
-        const freehandElement = selectedElement as FreehandElement;
-
-        // Scale each point in the stroke relative to the reference point
-        const updatedStrokes = freehandElement.stroke.map(
-          ([px, py, pressure]) => [
-            referenceX + (px - referenceX) * scaleX,
-            referenceY + (py - referenceY) * scaleY,
-            pressure,
-          ]
+      } else if (
+        boundingElement?.type === "line" &&
+        boundingElement?.isSelected
+      ) {
+        // Check which position has been selected
+        // Based on that we have to scale the curve
+        console.log(
+          "Bounding Box Selected Position is,",
+          boundingElement.selectedPosition
         );
 
-        // Update the element with new values
-        const updatedElement = {
-          ...selectedElement,
-          x1: newX1,
-          y1: newY1,
-          x2: newX2,
-          y2: newY2,
-          stroke: updatedStrokes,
-        };
+        const { x1, y1, x2, y2, controlPoint } = selectedElement as LineElement;
 
-        setSelectedElement(updatedElement);
-        setBoundingElement(getElementBoundingBox(updatedElement, scale));
-      } else {
-        // For non-freehand elements
-        const updatedElement = {
-          ...selectedElement,
-          x1: newX1,
-          y1: newY1,
-          x2: newX2,
-          y2: newY2,
-        };
+        let newX1 = x1,
+          newX2 = x2,
+          newY1 = y1,
+          newY2 = y2;
+        const newControlPoints: Point = controlPoint;
+        let diff: number;
+        // First, determine the actual bounds of the curve including the influence of control points
+        const bezierPoints = [
+          { x: x1, y: y1 }, // Start point
+          { x: controlPoint.x, y: controlPoint.y }, // Control point
+          { x: x2, y: y2 }, // End point
+        ];
 
-        setSelectedElement(updatedElement);
+        // Calculate the true bounding box of the Bezier curve
+        const minX = Math.min(
+          x1,
+          x2,
+          quadraticBezierMidpoint(selectedElement).x
+        );
+        const maxX = Math.max(
+          x1,
+          x2,
+          quadraticBezierMidpoint(selectedElement).x
+        );
+        const minY = Math.min(
+          y1,
+          y2,
+          quadraticBezierMidpoint(selectedElement).y
+        );
+        const maxY = Math.max(
+          y1,
+          y2,
+          quadraticBezierMidpoint(selectedElement).y
+        );
+
+        // Calculate true width and height
+        const trueWidth = maxX - minX;
+        const trueHeight = maxY - minY;
+
+        // Define original control point position relative to the bounding box
+        const relativeControlX = (controlPoint.x - minX) / trueWidth;
+        const relativeControlY = (controlPoint.y - minY) / trueHeight;
+
+        let newMinX = minX,
+          newMaxX = maxX,
+          newMinY = minY,
+          newMaxY = maxY;
+        let flipX = false,
+          flipY = false;
+
+        switch (boundingElement.selectedPosition) {
+          case "b":
+            newMaxY = clientY;
+            // Check for vertical flip
+            if (newMaxY < newMinY) {
+              [newMinY, newMaxY] = [newMaxY, newMinY];
+              flipY = true;
+            }
+            break;
+          case "t":
+            newMinY = clientY;
+            // Check for vertical flip
+            if (newMinY > newMaxY) {
+              [newMinY, newMaxY] = [newMaxY, newMinY];
+              flipY = true;
+            }
+            break;
+          case "l":
+            newMinX = clientX;
+            // Check for horizontal flip
+            if (newMinX > newMaxX) {
+              [newMinX, newMaxX] = [newMaxX, newMinX];
+              flipX = true;
+            }
+            break;
+          case "r":
+            newMaxX = clientX;
+            // Check for horizontal flip
+            if (newMaxX < newMinX) {
+              [newMinX, newMaxX] = [newMaxX, newMinX];
+              flipX = true;
+            }
+            break;
+          // Corner cases
+          case "tr":
+            newMinY = clientY;
+            newMaxX = clientX;
+            // Check for flips
+            if (newMinY > newMaxY) {
+              [newMinY, newMaxY] = [newMaxY, newMinY];
+              flipY = true;
+            }
+            if (newMaxX < newMinX) {
+              [newMinX, newMaxX] = [newMaxX, newMinX];
+              flipX = true;
+            }
+            break;
+          case "tl":
+            newMinY = clientY;
+            newMinX = clientX;
+            // Check for flips
+            if (newMinY > newMaxY) {
+              [newMinY, newMaxY] = [newMaxY, newMinY];
+              flipY = true;
+            }
+            if (newMinX > newMaxX) {
+              [newMinX, newMaxX] = [newMaxX, newMinX];
+              flipX = true;
+            }
+            break;
+          case "br":
+            newMaxY = clientY;
+            newMaxX = clientX;
+            // Check for flips
+            if (newMaxY < newMinY) {
+              [newMinY, newMaxY] = [newMaxY, newMinY];
+              flipY = true;
+            }
+            if (newMaxX < newMinX) {
+              [newMinX, newMaxX] = [newMaxX, newMinX];
+              flipX = true;
+            }
+            break;
+          case "bl":
+            newMaxY = clientY;
+            newMinX = clientX;
+            // Check for flips
+            if (newMaxY < newMinY) {
+              [newMinY, newMaxY] = [newMaxY, newMinY];
+              flipY = true;
+            }
+            if (newMinX > newMaxX) {
+              [newMinX, newMaxX] = [newMaxX, newMinX];
+              flipX = true;
+            }
+            break;
+        }
+
+        // Calculate new dimensions (ensure they're never zero to avoid division issues)
+        const newTrueWidth = Math.max(newMaxX - newMinX, 0.1);
+        const newTrueHeight = Math.max(newMaxY - newMinY, 0.1);
+
+        // Update control point while maintaining its relative position, accounting for flips
+        let newRelativeX = relativeControlX;
+        let newRelativeY = relativeControlY;
+
+        if (flipX) newRelativeX = 1 - relativeControlX;
+        if (flipY) newRelativeY = 1 - relativeControlY;
+
+        newControlPoints.x = newMinX + newRelativeX * newTrueWidth;
+        newControlPoints.y = newMinY + newRelativeY * newTrueHeight;
+
+        // Map original endpoints to new positions based on their relationship to the original bounds
+        // For each endpoint, determine if it was at min/max X/Y originally, and map accordingly
+        if (Math.abs(x1 - minX) < 0.001) {
+          newX1 = flipX ? newMaxX : newMinX;
+        } else if (Math.abs(x1 - maxX) < 0.001) {
+          newX1 = flipX ? newMinX : newMaxX;
+        } else {
+          // If it wasn't at the boundary, maintain its relative position
+          const relX1 = (x1 - minX) / trueWidth;
+          newX1 = newMinX + (flipX ? 1 - relX1 : relX1) * newTrueWidth;
+        }
+
+        if (Math.abs(x2 - minX) < 0.001) {
+          newX2 = flipX ? newMaxX : newMinX;
+        } else if (Math.abs(x2 - maxX) < 0.001) {
+          newX2 = flipX ? newMinX : newMaxX;
+        } else {
+          const relX2 = (x2 - minX) / trueWidth;
+          newX2 = newMinX + (flipX ? 1 - relX2 : relX2) * newTrueWidth;
+        }
+
+        if (Math.abs(y1 - minY) < 0.001) {
+          newY1 = flipY ? newMaxY : newMinY;
+        } else if (Math.abs(y1 - maxY) < 0.001) {
+          newY1 = flipY ? newMinY : newMaxY;
+        } else {
+          const relY1 = (y1 - minY) / trueHeight;
+          newY1 = newMinY + (flipY ? 1 - relY1 : relY1) * newTrueHeight;
+        }
+
+        if (Math.abs(y2 - minY) < 0.001) {
+          newY2 = flipY ? newMaxY : newMinY;
+        } else if (Math.abs(y2 - maxY) < 0.001) {
+          newY2 = flipY ? newMinY : newMaxY;
+        } else {
+          const relY2 = (y2 - minY) / trueHeight;
+          newY2 = newMinY + (flipY ? 1 - relY2 : relY2) * newTrueHeight;
+        }
+
+        console.log("Current Control Points", controlPoint);
+        console.log("New Control Points", newControlPoints);
+
+        setSelectedElement({
+          ...selectedElement,
+          controlPoint: newControlPoints as Point,
+          x1: newX1,
+          x2: newX2 as number,
+          y1: newY1,
+          y2: newY2 as number,
+        } as LineElement);
+
+        let selectedPos = boundingElement.selectedPosition;
+
+        // Update selected position based on flips
+        if (flipX && flipY) {
+          // Complete diagonal flip
+          switch (selectedPos) {
+            case "tr":
+              selectedPos = "bl";
+              break;
+            case "tl":
+              selectedPos = "br";
+              break;
+            case "br":
+              selectedPos = "tl";
+              break;
+            case "bl":
+              selectedPos = "tr";
+              break;
+            case "t":
+              selectedPos = "b";
+              break;
+            case "b":
+              selectedPos = "t";
+              break;
+            case "l":
+              selectedPos = "r";
+              break;
+            case "r":
+              selectedPos = "l";
+              break;
+          }
+        } else if (flipX) {
+          // Horizontal flip only
+          switch (selectedPos) {
+            case "tr":
+              selectedPos = "tl";
+              break;
+            case "tl":
+              selectedPos = "tr";
+              break;
+            case "br":
+              selectedPos = "bl";
+              break;
+            case "bl":
+              selectedPos = "br";
+              break;
+            case "l":
+              selectedPos = "r";
+              break;
+            case "r":
+              selectedPos = "l";
+              break;
+          }
+        } else if (flipY) {
+          // Vertical flip only
+          switch (selectedPos) {
+            case "tr":
+              selectedPos = "br";
+              break;
+            case "tl":
+              selectedPos = "bl";
+              break;
+            case "br":
+              selectedPos = "tr";
+              break;
+            case "bl":
+              selectedPos = "tl";
+              break;
+            case "t":
+              selectedPos = "b";
+              break;
+            case "b":
+              selectedPos = "t";
+              break;
+          }
+        }
+
         setBoundingElement({
-          x1: newX1 - padding,
-          y1: newY1 - padding,
-          x2: newX2 + padding,
-          y2: newY2 + padding,
-          width: newX2 - newX1 + 2 * padding,
-          height: newY2 - newY1 + 2 * padding,
+          ...boundingElement,
+          x1: newX1,
+          x2: newX2 as number,
+          y1: newY1,
+          y2: newY2 as number,
+          selectedPosition: selectedPos,
         });
       }
     }
@@ -1039,11 +1192,7 @@ export function WhiteBoard() {
       if (tool === "line") {
         const { x1, y1, x2, y2, type } = drawingElement as LineElement;
         const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
-          type as Shapes,
-          x1,
-          y1,
-          x2,
-          y2
+          drawingElement as Element
         );
 
         setElements([
@@ -1078,11 +1227,7 @@ export function WhiteBoard() {
         if (x2 === undefined || y2 === undefined) return;
 
         const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
-          element.type as Shapes,
-          x1,
-          y1,
-          x2,
-          y2
+          selectedElement as Element
         );
 
         updateElement(lastIndex, {
@@ -1107,13 +1252,8 @@ export function WhiteBoard() {
         // Create a copy of the elements array
         const updatedElements = [...elements];
 
-        const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
-          selectedElement.type as Shapes,
-          selectedElement.x1,
-          selectedElement.y1,
-          selectedElement.x2 as number,
-          selectedElement.y2 as number
-        );
+        const { newX1, newY1, newX2, newY2 } =
+          adjustElementCoordinates(selectedElement);
         // Replace the element at the index with the selectedElement
         updatedElements[index] = {
           ...selectedElement,
