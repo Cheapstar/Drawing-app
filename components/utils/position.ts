@@ -1,41 +1,49 @@
-import { Point, SelectedPosition, Element, LineElement } from "@/types/types";
+import {
+  Point,
+  SelectedPosition,
+  Element,
+  LineElement,
+  RectangleElement,
+  FreehandElement,
+} from "@/types/types";
 import { BoundingElement } from "../WhiteBoard";
-
+import { checkOnline } from "@/Geometry/line/position";
+import { checkOnRectangle } from "@/Geometry/rectangle/position";
+import { checkOnFreehand } from "@/Geometry/freehand/position";
 export const getElementAtPosition = (
   clientX: number,
   clientY: number,
   elements: Element[],
   scale?: number
-): Partial<Element> => {
-  let position: boolean = false;
+): Partial<Element> | undefined => {
+  let result: boolean = false;
 
   const foundElement = elements.find((element: Element) => {
-    position = positionWithinShape(
-      point(clientX, clientY),
-      element,
-      scale as number
-    );
-    return position;
+    result = checkOnElements(point(clientX, clientY), element, scale as number);
+    return result;
   });
 
-  console.log("Found Element Position is ", position);
+  console.log("Found Element Position is ", result);
 
-  return {
-    ...(foundElement || {}),
-  };
+  return foundElement;
 };
 
-export const positionWithinShape = (
+export const checkOnElements = (
   client: Point,
   element: Element,
   scale?: number
 ): boolean => {
   switch (element.type) {
     case "rectangle":
+      return checkOnRectangle(
+        client,
+        element as RectangleElement,
+        scale as number
+      );
     case "line":
-      return positionOnLine(client, element as LineElement, scale as number);
+      return checkOnline(client, element as LineElement, scale as number);
     case "freehand":
-
+      return checkOnFreehand(client, element) as boolean;
     case "text":
 
     default:
@@ -47,91 +55,10 @@ export const nearPoint = (
   x1: number,
   y1: number,
   x2: number,
-  y2: number
+  y2: number,
+  range: number = 5
 ): boolean => {
-  return Math.abs(x2 - x1) < 5 && Math.abs(y2 - y1) < 5;
-};
-
-export const positionOnPencil = (client: Point, stroke?: number[][]) => {
-  if (!stroke || stroke.length < 1) return null;
-  if (stroke.length === 1) {
-    return nearPoint(client.x, client.y, stroke[0][0], stroke[0][1])
-      ? "inside"
-      : null;
-  }
-
-  let a = stroke[0];
-
-  for (let i = 1; i < stroke.length; i++) {
-    const b = stroke[i];
-    const res = positionOnLine(client, point(a[0], a[1]), point(b[0], b[1]));
-    if (res) {
-      return res;
-    }
-
-    a = b;
-  }
-  return null;
-};
-
-export const positionOnRectangle = (
-  clientX: number,
-  clientY: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number
-): SelectedPosition => {
-  const topLeft = nearPoint(clientX, clientY, x1, y1) ? "tl" : null;
-  const topRight = nearPoint(clientX, clientY, x2, y1) ? "tr" : null;
-  const bottomLeft = nearPoint(clientX, clientY, x1, y2) ? "bl" : null;
-  const bottomRight = nearPoint(clientX, clientY, x2, y2) ? "br" : null;
-
-  const top = positionOnLine(
-    point(clientX, clientY),
-    point(x1, y1),
-    point(x2, y1)
-  )
-    ? "t"
-    : null;
-  const right = positionOnLine(
-    point(clientX, clientY),
-    point(x2, y1),
-    point(x2, y2)
-  )
-    ? "r"
-    : null;
-  const bottom = positionOnLine(
-    point(clientX, clientY),
-    point(x1, y2),
-    point(x2, y2)
-  )
-    ? "b"
-    : null;
-  const left = positionOnLine(
-    point(clientX, clientY),
-    point(x1, y1),
-    point(x1, y2)
-  )
-    ? "l"
-    : null;
-
-  const inside =
-    clientX >= x1 && clientY >= y1 && clientX <= x2 && clientY <= y2
-      ? "inside"
-      : null;
-
-  return (
-    topLeft ||
-    topRight ||
-    bottomLeft ||
-    bottomRight ||
-    top ||
-    right ||
-    bottom ||
-    left ||
-    inside
-  );
+  return Math.abs(x2 - x1) < range && Math.abs(y2 - y1) < range;
 };
 
 export const distance = (a: Point, b: Point): number => {
@@ -139,30 +66,6 @@ export const distance = (a: Point, b: Point): number => {
 };
 
 export const point = (x: number, y: number): Point => ({ x, y });
-
-function positionOnLine(client: Point, element: LineElement, scale: number) {
-  const halfStroke = (element.strokeWidth as number) / (2 * scale);
-
-  for (let t = 0; t <= 1; t += 0.01) {
-    // Iterate over `t` values
-    const bx =
-      (1 - t) * (1 - t) * element.x1 +
-      2 * (1 - t) * t * element.controlPoint.x +
-      t * t * element.x2;
-    const by =
-      (1 - t) * (1 - t) * element.y1 +
-      2 * (1 - t) * t * element.controlPoint.y +
-      t * t * element.y2;
-
-    if (
-      Math.abs(bx - client.x) < halfStroke &&
-      Math.abs(by - client.y) < halfStroke
-    ) {
-      return true; // Point is on the curve
-    }
-  }
-  return false;
-}
 
 export function quadraticBezierMidpoint(element: LineElement) {
   const mx =
@@ -192,10 +95,10 @@ export function getPositionOnBoundingBox(
 ) {
   if (!boundingBox) return "none";
 
-  if (boundingBox.type === "line") {
+  if (boundingBox.type === "rectangle") {
     const { x1, x2, y1, y2, padding } = boundingBox;
 
-    const strokeWidth = 4;
+    const threshold = 2;
     // Checking on the corners
     const topLeft = nearPoint(x1 - padding, y1 - padding, client.x, client.y)
       ? "tl"
@@ -217,27 +120,168 @@ export function getPositionOnBoundingBox(
 
     // Checking on the edges
     const top =
-      client.x >= x1 &&
-      client.x <= x2 &&
-      Math.abs(y1 - client.y) <= (strokeWidth as number)
+      client.x >= x1 - padding &&
+      client.x <= x2 + padding &&
+      Math.abs(y1 - padding - client.y) <= (threshold as number)
         ? "t"
         : null;
     const left =
-      client.y >= y1 &&
-      client.y <= y2 &&
-      Math.abs(x1 - client.x) <= (strokeWidth as number)
+      client.y >= y1 - padding &&
+      client.y <= y2 + padding &&
+      Math.abs(x1 - padding - client.x) <= (threshold as number)
         ? "l"
         : null;
     const right =
-      client.y >= y1 &&
-      client.y <= y2 &&
-      Math.abs(x2 - client.x) <= (strokeWidth as number)
+      client.y >= y1 - padding &&
+      client.y <= y2 + padding &&
+      Math.abs(x2 + padding - client.x) <= (threshold as number)
         ? "r"
         : null;
     const bottom =
-      client.x >= x1 &&
-      client.x <= x2 &&
-      Math.abs(y2 - client.y) <= (strokeWidth as number)
+      client.x >= x1 - padding &&
+      client.x <= x2 + padding &&
+      Math.abs(y2 + padding - client.y) <= (threshold as number)
+        ? "b"
+        : null;
+
+    // Check if point is inside the bounding box
+    const inside =
+      client.x > x1 - padding &&
+      client.x < x2 + padding &&
+      client.y > y1 - padding &&
+      client.y < y2 + padding
+        ? "inside"
+        : null;
+
+    return (
+      topLeft ||
+      bottomLeft ||
+      topRight ||
+      bottomRight ||
+      top ||
+      left ||
+      right ||
+      bottom ||
+      inside ||
+      "none"
+    );
+  }
+  if (boundingBox.type === "line") {
+    const { x1, x2, y1, y2, padding } = boundingBox;
+
+    const threshold = 1;
+    // Checking on the corners
+    const topLeft = nearPoint(x1 - padding, y1 - padding, client.x, client.y)
+      ? "tl"
+      : null;
+    const bottomLeft = nearPoint(x1 - padding, y2 + padding, client.x, client.y)
+      ? "bl"
+      : null;
+    const topRight = nearPoint(x2 + padding, y1 - padding, client.x, client.y)
+      ? "tr"
+      : null;
+    const bottomRight = nearPoint(
+      x2 + padding,
+      y2 + padding,
+      client.x,
+      client.y
+    )
+      ? "br"
+      : null;
+
+    // Checking on the edges
+    const top =
+      client.x >= x1 - threshold &&
+      client.x <= x2 + threshold &&
+      Math.abs(y1 - client.y) <= (threshold as number)
+        ? "t"
+        : null;
+    const left =
+      client.y >= y1 - threshold &&
+      client.y <= y2 + threshold &&
+      Math.abs(x1 - client.x) <= (threshold as number)
+        ? "l"
+        : null;
+    const right =
+      client.y >= y1 - threshold &&
+      client.y <= y2 + threshold &&
+      Math.abs(x2 - client.x) <= (threshold as number)
+        ? "r"
+        : null;
+    const bottom =
+      client.x >= x1 - threshold &&
+      client.x <= x2 + threshold &&
+      Math.abs(y2 - client.y) <= (threshold as number)
+        ? "b"
+        : null;
+
+    // Check if point is inside the bounding box
+    const inside =
+      client.x > x1 && client.x < x2 && client.y > y1 && client.y < y2
+        ? "inside"
+        : null;
+
+    return (
+      topLeft ||
+      bottomLeft ||
+      topRight ||
+      bottomRight ||
+      top ||
+      left ||
+      right ||
+      bottom ||
+      inside ||
+      "none"
+    );
+  }
+  if (boundingBox.type === "freehand") {
+    const { x1, x2, y1, y2 } = boundingBox;
+
+    const padding = boundingBox.strokeWidth as number;
+
+    const threshold = padding;
+    // Checking on the corners
+    const topLeft = nearPoint(x1 - padding, y1 - padding, client.x, client.y)
+      ? "tl"
+      : null;
+    const bottomLeft = nearPoint(x1 - padding, y2 + padding, client.x, client.y)
+      ? "bl"
+      : null;
+    const topRight = nearPoint(x2 + padding, y1 - padding, client.x, client.y)
+      ? "tr"
+      : null;
+    const bottomRight = nearPoint(
+      x2 + padding,
+      y2 + padding,
+      client.x,
+      client.y
+    )
+      ? "br"
+      : null;
+
+    // Checking on the edges
+    const top =
+      client.x >= x1 - threshold &&
+      client.x <= x2 + threshold &&
+      Math.abs(y1 - client.y) <= (threshold as number)
+        ? "t"
+        : null;
+    const left =
+      client.y >= y1 - threshold &&
+      client.y <= y2 + threshold &&
+      Math.abs(x1 - client.x) <= (threshold as number)
+        ? "l"
+        : null;
+    const right =
+      client.y >= y1 - threshold &&
+      client.y <= y2 + threshold &&
+      Math.abs(x2 - client.x) <= (threshold as number)
+        ? "r"
+        : null;
+    const bottom =
+      client.x >= x1 - threshold &&
+      client.x <= x2 + threshold &&
+      Math.abs(y2 - client.y) <= (threshold as number)
         ? "b"
         : null;
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Element } from "@/types/types";
 
 export type HistoryState = Element[];
@@ -14,39 +14,60 @@ export const useHistory = (
   const [history, setHistory] = useState<HistoryState[]>([initialState]);
 
   const setState: SetHistoryState = (action, overWrite = false) => {
-    const newState =
-      typeof action === "function" ? action(history[index]) : action;
+    setHistory((prevHistory) => {
+      const newState =
+        typeof action === "function" ? action(prevHistory[index]) : action;
+      if (overWrite) {
+        const newHistory = [...prevHistory];
+        newHistory[index] = newState;
+        return newHistory;
+      } else {
+        const newHistory = [...prevHistory].slice(0, index + 1);
+        return [...newHistory, newState];
+      }
+    });
 
-    if (overWrite) {
-      const newHistory = [...history];
-      newHistory[index] = newState;
-      setHistory(newHistory);
-    } else {
-      const newHistory = [...history].slice(0, index + 1);
-      setHistory([...newHistory, newState]);
-      setIndex((prevState) => prevState + 1);
+    if (!overWrite) {
+      setIndex((prevIndex) => prevIndex + 1);
     }
   };
 
   const undo = () => {
     if (index > 0) {
-      const newIndex = index - 1;
-      const prevElements = history[newIndex];
-
-      // Restore opacity if needed
-      prevElements.forEach((element) => {
-        element.opacity = 1;
-      });
-
-      // First update the index
-      setIndex(newIndex);
-
-      // Then update the state with overwrite
-      setState(prevElements, true);
+      setIndex((prevIndex) => prevIndex - 1);
     }
   };
-  const redo = () =>
-    index < history.length - 1 && setIndex((prevState) => prevState + 1);
+
+  const redo = () => {
+    setIndex((prevIndex) => {
+      if (prevIndex < history.length - 1) {
+        return prevIndex + 1;
+      }
+      return prevIndex;
+    });
+  };
+
+  const handleKeyActions = useCallback(
+    (event: KeyboardEvent) => {
+      event.stopPropagation();
+      event.preventDefault(); // Prevent default undo/redo behavior
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        undo();
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+        redo();
+      }
+    },
+    [undo, redo]
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyActions);
+    return () => {
+      window.removeEventListener("keydown", handleKeyActions);
+    };
+  }, [handleKeyActions]);
 
   return [history[index] || [], setState, undo, redo];
 };

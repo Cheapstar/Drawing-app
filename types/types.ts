@@ -14,6 +14,7 @@ export type SelectedPosition =
   | "br"
   | "start"
   | "end"
+  | "middle"
   | "b"
   | "t"
   | "l"
@@ -71,11 +72,14 @@ export interface BoundingElement {
   y1: number;
   y2: number;
   padding: number;
+  height?: number;
+  width?: number;
   selectedPosition?: SelectedPosition;
   strokeWidth?: number;
   offsetX?: number[];
   offsetY?: number[];
   isSelected?: boolean;
+  stroke?: number[][];
 }
 
 // Common properties for elements with x1, y1, x2, y2 coordinates
@@ -125,6 +129,7 @@ export interface FreehandElement extends BaseElement {
   x2?: number;
   y2?: number;
   stroke: number[][];
+  originalStroke: number[][];
   path?: Path2D;
   drawnShape?: Drawable;
 }

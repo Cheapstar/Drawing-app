@@ -1,100 +1,5 @@
-import { DEFAULT_STROKE_OPTIONS } from "@/Constants";
-import getStroke from "perfect-freehand";
-import rough from "roughjs";
-import {
-  Element,
-  FreehandElement,
-  LineElement,
-  Point,
-  RectangleElement,
-  Shapes,
-} from "@/types/types";
-import { Config } from "roughjs/bin/core";
+import { Element, LineElement, RectangleElement, Shapes } from "@/types/types";
 import { quadraticBezierMidpoint } from "./position";
-
-const options: Config = {
-  roughness: 1, // Lower for less roughness
-  bowing: 0.5, // How much the lines bow
-  disableMultiStroke: true, // For cleaner, single stroke elements
-  seed: 42,
-};
-
-const generator = rough.generator(options);
-
-export const createRectangle = (element: RectangleElement) => {
-  console.log("Element is :", element);
-  const width = element.x2 - element.x1;
-  const height = element.y2 - element.y1;
-  const roughElement = generator.rectangle(
-    element.x1,
-    element.y1,
-    width,
-    height,
-    {
-      stroke: element.color,
-      strokeWidth: (element.strokeWidth as number) / 8,
-      ...options,
-    }
-  );
-  return roughElement;
-};
-
-export const createLine = (element: LineElement) => {
-  const roughElement = generator.line(
-    element.x1,
-    element.y1,
-    element.x2,
-    element.y2,
-    {
-      stroke: element.color,
-      strokeWidth: (element.strokeWidth as number) / 8,
-      ...options,
-    }
-  );
-  return roughElement;
-};
-
-export const createFreeHand = (element: FreehandElement) => {
-  console.log("In FreeHand", element.stroke);
-
-  const path = new Path2D();
-  const outline = getStroke(element.stroke, {
-    ...DEFAULT_STROKE_OPTIONS,
-    size: element.strokeWidth,
-  });
-
-  if (outline.length < 2)
-    return {
-      path,
-      x1: outline[0][0],
-      y1: outline[0][1],
-      x2: outline[0][0],
-      y2: outline[0][1],
-    };
-
-  path.moveTo(outline[0][0], outline[0][1]);
-
-  let minX = outline[0][0];
-  let maxX = outline[0][0];
-  let minY = outline[0][1];
-  let maxY = outline[0][1];
-
-  // Draw smooth curves through points
-  for (let i = 1; i < outline.length - 1; i++) {
-    const xc = (outline[i][0] + outline[i + 1][0]) / 2;
-    const yc = (outline[i][1] + outline[i + 1][1]) / 2;
-    path.quadraticCurveTo(outline[i][0], outline[i][1], xc, yc);
-
-    // updating the min's and max's
-    minX = Math.min(outline[i][0], minX);
-    maxX = Math.max(outline[i][0], maxX);
-    minY = Math.min(outline[i][1], minY);
-    maxY = Math.max(outline[i][1], maxY);
-  }
-
-  path.closePath();
-  return path;
-};
 
 export const adjustElementCoordinates = (element: Element) => {
   const { type } = element;
@@ -135,6 +40,52 @@ export const adjustElementCoordinates = (element: Element) => {
         newY2: newY2,
       };
     }
+  } else if (type === "rectangle") {
+    const { x1, x2, y1, y2 } = element as RectangleElement;
+
+    return {
+      newX1: Math.min(x1, x2),
+      newX2: Math.max(x1, x2),
+      newY1: Math.min(y1, y2),
+      newY2: Math.max(y1, y2),
+    };
+  } else if (type === "freehand") {
+    // Initialize with extreme values or first point if available
+    if (!element.stroke.length) {
+      return { x1: 0, y1: 0, x2: 0, y2: 0, width: 0, height: 0 };
+    }
+
+    if (element.stroke.length === 1) {
+      console.log("Here is the Bounding Box");
+      return {
+        x1: element.stroke[0][0],
+        y1: element.stroke[0][1],
+        x2: element.stroke[0][0],
+        y2: element.stroke[0][1],
+        width: 10,
+        height: 10,
+      };
+    }
+
+    let minX = element.stroke[0][0];
+    let maxX = element.stroke[0][0];
+    let minY = element.stroke[0][1];
+    let maxY = element.stroke[0][1];
+
+    // Loop through all points to find min/max values
+    for (const [x, y] of element.stroke) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+
+    return {
+      newX1: minX,
+      newY1: minY,
+      newX2: maxX,
+      newY2: maxY,
+    };
   }
 
   // Return the original element if it's not a line
@@ -158,9 +109,7 @@ export function scaleStroke(
 export function getElementBoundingBox(element: Element, scale: number) {
   switch (element.type) {
     case Shapes.Rectangle:
-    case Shapes.Ellipse:
     case Shapes.Line:
-    case Shapes.Arrow:
       // For shapes with x1, y1, x2, y2 properties
       const x1 = Math.min(element.x1, element.x2);
       const y1 = Math.min(element.y1, element.y2);
@@ -252,64 +201,6 @@ export function drawHandle(
     [2]
   );
   ctx.stroke();
-}
-
-export function drawAnchorPoints(
-  ctx: CanvasRenderingContext2D,
-  element: LineElement,
-  scale: number
-) {
-  // Here hume draw karne hai anchor points , two on the corners aur last on the middle , jo ki control point hoga
-  const radius = 5 / scale;
-
-  ctx.beginPath();
-  ctx.arc(element.x1, element.y1, radius, 0, Math.PI * 2, false);
-  ctx.fillStyle = "white";
-  ctx.strokeStyle = "#6965db";
-  ctx.fill();
-  ctx.stroke();
-  ctx.closePath();
-
-  const midPoints = quadraticBezierMidpoint(element);
-  ctx.beginPath();
-  ctx.arc(midPoints.x, midPoints.y, radius, 0, Math.PI * 2, false);
-  ctx.fillStyle = "#6965db";
-  ctx.fill();
-  ctx.closePath();
-
-  ctx.beginPath();
-  ctx.arc(element.x2, element.y2, radius, 0, Math.PI * 2, false);
-
-  ctx.fillStyle = "white";
-  ctx.strokeStyle = "#6965db";
-  ctx.fill();
-  ctx.stroke();
-  ctx.closePath();
-}
-
-export function drawCurveBoundingBox(
-  ctx: CanvasRenderingContext2D,
-  element: LineElement,
-  scale: number
-) {
-  const midPoints = quadraticBezierMidpoint(element);
-  const x1 = Math.min(element.x1, element.x2, midPoints.x);
-  const y1 = Math.min(element.y1, element.y2, midPoints.y);
-  const x2 = Math.max(element.x1, element.x2, midPoints.x);
-  const y2 = Math.max(element.y1, element.y2, midPoints.y);
-
-  ctx.beginPath();
-  ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-  ctx.strokeStyle = "#6965db";
-  ctx.stroke();
-  ctx.closePath();
-
-  const padding = 8;
-  // Draw small rounded rectangles at bounding box corners
-  drawHandle(ctx, x1 - padding, y1 - padding); // Top-left
-  drawHandle(ctx, x2 + padding, y1 - padding); // Top-right
-  drawHandle(ctx, x1 - padding, y2 + padding); // Bottom
-  drawHandle(ctx, x2 + padding, y2 + padding); // Bottom
 }
 
 export function getTheBoundingBox(element: Element, scale: number) {
