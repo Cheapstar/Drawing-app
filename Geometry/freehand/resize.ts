@@ -1,6 +1,5 @@
-import { BoundingElement, FreehandElement, Point } from "@/types/types";
-import { getTheBoundingElement } from "../elements/boundingElement";
-import { PADDING } from "@/Constants";
+import { FreehandElement, Point } from "@/types/types";
+
 import { adjustElementCoordinates } from "@/components/utils/elements";
 
 export function handleFreehandResize(
@@ -30,19 +29,9 @@ export function handleFreehandResize(
     return;
   }
 
-  const { x1, x2, y1, y2, type, selectedPosition, originalStroke } =
-    selectedElement;
+  const { x1, x2, y1, y2, selectedPosition, originalStroke } = selectedElement;
 
   console.log("Selected Element", selectedElement);
-
-  // Calculate width and height
-  const width = x2 - x1;
-  const height = y2 - y1;
-
-  let scaleX = 1,
-    scaleY = 1;
-  let referenceX = x1,
-    referenceY = y1;
 
   let newX1 = x1,
     newY1 = y1,
@@ -52,77 +41,40 @@ export function handleFreehandResize(
   // Calculate scaling based on the selected position
   switch (selectedPosition) {
     case "b":
-      scaleY = height ? (client.y - y1) / height : 1;
-      referenceY = y1;
       newY2 = client.y;
       break;
 
     case "t":
-      scaleY = height ? (y2 - client.y) / height : 1;
-      referenceY = y2;
       newY1 = client.y;
       break;
 
     case "l":
-      scaleX = width ? (x2 - client.x) / width : 1;
-      referenceX = x2;
       newX1 = client.x;
       break;
 
     case "r":
-      scaleX = width ? (client.x - x1) / width : 1;
-      referenceX = x1;
       newX2 = client.x;
       break;
 
     case "tl":
-      scaleX = width ? (x2 - client.x) / width : 1;
-      scaleY = height ? (y2 - client.y) / height : 1;
-      referenceX = x2;
-      referenceY = y2;
       newX1 = client.x;
       newY1 = client.y;
       break;
 
     case "tr":
-      scaleX = width ? (client.x - x1) / width : 1;
-      scaleY = height ? (y2 - client.y) / height : 1;
-      referenceX = x1;
-      referenceY = y2;
       newX2 = client.x;
       newY1 = client.y;
       break;
 
     case "bl":
-      scaleX = width ? (x2 - client.x) / width : 1;
-      scaleY = height ? (client.y - y1) / height : 1;
-      referenceX = x2;
-      referenceY = y1;
       newX1 = client.x;
       newY2 = client.y;
       break;
 
     case "br":
-      scaleX = width ? (client.x - x1) / width : 1;
-      scaleY = height ? (client.y - y1) / height : 1;
-      referenceX = x1;
-      referenceY = y1;
       newX2 = client.x;
       newY2 = client.y;
       break;
-  }
-
-  let updatedStrokes;
-
-  if (type === "freehand") {
-    // Always scale from the original stroke to prevent cumulative distortion
-    updatedStrokes = scaleStroke(
-      originalStroke,
-      scaleX,
-      scaleY,
-      referenceX,
-      referenceY
-    );
   }
 
   // Calculate original bounding box from original stroke
@@ -187,18 +139,5 @@ function scaleStrokeToFit(
   return stroke.map(([px, py]) => [
     newX1 + (px - minX) * scaleX,
     newY1 + (py - minY) * scaleY,
-  ]);
-}
-
-function scaleStroke(
-  stroke: number[][],
-  scaleX: number,
-  scaleY: number,
-  originX: number,
-  originY: number
-) {
-  return stroke.map(([px, py]) => [
-    originX + (px - originX) * scaleX,
-    originY + (py - originY) * scaleY,
   ]);
 }

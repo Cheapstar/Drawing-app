@@ -86,6 +86,7 @@ export const adjustElementCoordinates = (element: Element) => {
       newX2: maxX,
       newY2: maxY,
     };
+  } else if (type === "text") {
   }
 
   // Return the original element if it's not a line

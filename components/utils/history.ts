@@ -49,13 +49,12 @@ export const useHistory = (
 
   const handleKeyActions = useCallback(
     (event: KeyboardEvent) => {
-      event.stopPropagation();
-      event.preventDefault(); // Prevent default undo/redo behavior
-
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault(); // Prevent default undo/redo behavior
         undo();
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+        event.preventDefault(); // Prevent default undo/redo behavior
         redo();
       }
     },

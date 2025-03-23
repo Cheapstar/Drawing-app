@@ -35,7 +35,7 @@ import {
 import { HistoryState, useHistory } from "./utils/history";
 import { point } from "./utils/position";
 import { adjustElementCoordinates } from "./utils/elements";
-import { drawElement } from "./utils/draw";
+import { drawElement } from "@/Geometry/elements/draw";
 
 import { handleElementSelection } from "@/Geometry/elements/selection";
 import { drawBoundingBox } from "@/Geometry/elements/draw";
@@ -53,10 +53,6 @@ import {
 import { TOOLS } from "@/Constants";
 import { useZoom } from "./utils/useZoom";
 import { usePan } from "./utils/usePan";
-
-/**
- * Updates stroke coordinates for freehand elements during movement
- */
 
 type CursorAction =
   | "vertical"
@@ -76,6 +72,7 @@ export function WhiteBoard() {
     setPanOffSet,
     startPanMousePosition,
     setStartPanMousePosition,
+    setExpand,
   } = usePan();
 
   const [eraseElements, setEraseElements] = useState<Element[]>([]);
@@ -125,21 +122,6 @@ export function WhiteBoard() {
     return () => window.removeEventListener("resize", resizeCanvas);
   }, [resizeCanvas]);
 
-  // Handle wheel events for panning
-  useEffect(() => {
-    const panOrZoomFunction = (event: WheelEvent) => {
-      setPanOffSet((prevState) => ({
-        x: prevState.x - event.deltaX,
-        y: prevState.y - event.deltaY,
-      }));
-    };
-
-    document.addEventListener("wheel", panOrZoomFunction);
-    return () => {
-      document.removeEventListener("wheel", panOrZoomFunction);
-    };
-  }, [tool]);
-
   // Draw the canvas
   useLayoutEffect(() => {
     const canvas = boardRef.current;
@@ -173,7 +155,7 @@ export function WhiteBoard() {
     );
     ctx.scale(scale, scale);
 
-    if (drawingElement) {
+    if (drawingElement && drawingElement.type != "text") {
       drawElement(rc, ctx, drawingElement);
     }
 
@@ -276,9 +258,11 @@ export function WhiteBoard() {
       color,
       fontSize,
       fontFamily,
+      breaks: [],
     };
 
-    setSelectedElement(newElement);
+    setDrawingElement(newElement);
+    setSelectedElement(null);
     setAction("writing");
   };
 
@@ -589,8 +573,8 @@ export function WhiteBoard() {
   // Handle text input blur (finalize text element)
   const handleBlur = () => {
     if (
-      !selectedElement ||
-      selectedElement.type !== "text" ||
+      !drawingElement ||
+      drawingElement.type !== "text" ||
       !textElementRef.current
     )
       return;
@@ -601,21 +585,24 @@ export function WhiteBoard() {
     ctx.save();
     ctx.font = `${fontSize}px ${fontFamily}`;
 
-    const text = textElementRef.current.value || "";
+    const text = drawingElement.text || "";
     const metrics = ctx.measureText(text);
-    const height = fontSize;
+    const height =
+      drawingElement?.fontSize * (drawingElement.breaks.length + 1);
 
     const updatedElement: TextElement = {
-      ...selectedElement,
+      ...drawingElement,
       text,
-      x2: selectedElement.x1 + metrics.width,
-      y2: selectedElement.y1 + height,
+      x2: drawingElement.x1 + metrics.width,
+      y2: drawingElement.y1 + height,
     };
 
     setElements([...elements, updatedElement]);
-    ctx.restore();
 
-    setSelectedElement(null);
+    ctx.restore();
+    console.log("Drawing Element is", drawingElement);
+
+    setDrawingElement(null);
     setTool("select");
     setAction("selecting");
   };
@@ -719,23 +706,44 @@ export function WhiteBoard() {
       </div>
 
       {/* Text input area */}
-      {action === "writing" && selectedElement && (
+      {action === "writing" && drawingElement && (
         <textarea
           onBlur={handleBlur}
           ref={textElementRef}
-          className="fixed focus:outline-none resize-none"
+          className="fixed focus:outline-none resize-none z-[1000] h-full w-full"
           style={{
             top:
-              selectedElement.y1 * scale +
+              drawingElement.y1 * scale +
               panOffset.y * scale -
               scaleOffset.y -
               10 * scale,
             left:
-              selectedElement.x1 * scale + panOffset.x * scale - scaleOffset.x,
+              drawingElement.x1 * scale + panOffset.x * scale - scaleOffset.x,
             fontFamily: fontFamily,
             color: color,
             fontSize: fontSize * scale,
             transformOrigin: "top left",
+          }}
+          onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => {
+            if (drawingElement.type === "text") {
+              setDrawingElement({
+                ...drawingElement,
+                text: event.target.value,
+              });
+            }
+          }}
+          onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+            if (event.key === "Enter") {
+              if (drawingElement.type === "text") {
+                const newBreaks = [...(drawingElement as TextElement).breaks];
+                newBreaks.push((drawingElement.text as string).length);
+
+                setDrawingElement({
+                  ...drawingElement,
+                  breaks: newBreaks,
+                });
+              }
+            }
           }}
         />
       )}

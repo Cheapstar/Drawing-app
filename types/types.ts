@@ -86,8 +86,8 @@ export interface BoundingElement {
 export interface GeometricElement extends BaseElement {
   x1: number;
   y1: number;
-  x2?: number;
-  y2?: number;
+  x2: number;
+  y2: number;
   drawnShape?: Drawable;
 }
 
@@ -117,8 +117,11 @@ export interface TextElement extends GeometricElement {
   text?: string;
   fontSize?: number;
   fontFamily?: string;
-  x2?: number;
-  y2?: number;
+  height: number;
+  width: number;
+  x2: number;
+  y2: number;
+  breaks: number[];
 }
 
 // Freehand specific properties
@@ -126,8 +129,8 @@ export interface FreehandElement extends BaseElement {
   type: "freehand";
   x1: number;
   y1: number;
-  x2?: number;
-  y2?: number;
+  x2: number;
+  y2: number;
   stroke: number[][];
   originalStroke: number[][];
   path?: Path2D;

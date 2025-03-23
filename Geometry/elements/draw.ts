@@ -6,6 +6,7 @@ import { createLine } from "@/Geometry/line/draw";
 import { createRectangle } from "@/Geometry/rectangle/draw";
 import { quadraticBezierMidpoint } from "@/components/utils/position";
 import { getTheBoundingElement } from "./boundingElement";
+import { drawText } from "../text/draw";
 
 export const drawElement = (
   roughCanvas: RoughCanvas,
@@ -38,15 +39,7 @@ export const drawElement = (
       break;
     case "text":
       ctx.save();
-      ctx.textBaseline = "top";
-      ctx.textRendering = "geometricPrecision";
-      ctx.fillStyle = element.color as string;
-      console.log("FontSize", element.fontSize);
-      if (element.opacity) {
-        ctx.globalAlpha = element.opacity;
-      }
-      ctx.font = `${element.fontSize}px ${element.fontFamily}`;
-      ctx.fillText(element.text as string, element.x1, element.y1 as number);
+      drawText(ctx, element);
       ctx.restore();
       break;
   }
