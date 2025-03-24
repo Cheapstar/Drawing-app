@@ -55,6 +55,7 @@ import { TOOLS } from "@/Constants";
 import { useZoom } from "./utils/useZoom";
 import { usePan } from "./utils/usePan";
 import { getTextElementDetails } from "@/Geometry/text/boundingElement";
+import { deleteElement } from "@/Geometry/elements/deleteElement";
 
 type CursorAction =
   | "vertical"
@@ -626,6 +627,24 @@ export function WhiteBoard() {
     if (action === "panning") return "grabbing";
     return TOOLS[tool]?.cursor || "default";
   };
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (!selectedElement) return;
+
+    console.log("Deleting the Element");
+
+    if (event.key === "Delete" || event.key === "Backspace") {
+      deleteElement(elements, selectedElement, setSelectedElement, setElements);
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedElement]);
 
   return (
     <div
