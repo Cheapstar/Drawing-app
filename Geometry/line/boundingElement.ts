@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { quadraticBezierMidpoint } from "@/components/utils/position";
+import { quadraticBezierMidpoint } from "@/Geometry/utils";
 import { PADDING } from "@/Constants";
 import { LineElement } from "@/types/types";
 

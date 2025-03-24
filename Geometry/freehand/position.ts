@@ -1,4 +1,4 @@
-import { nearPoint } from "@/components/utils/position";
+import { nearPoint } from "@/Geometry/utils";
 import { FreehandElement, Point } from "@/types/types";
 
 export const checkOnFreehand = (client: Point, element: FreehandElement) => {

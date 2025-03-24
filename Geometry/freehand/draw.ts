@@ -1,4 +1,4 @@
-import { drawHandle } from "@/components/utils/elements";
+import { drawHandle } from "@/Geometry/elements/draw";
 import { DEFAULT_STROKE_OPTIONS } from "@/Constants";
 import { FreehandElement } from "@/types/types";
 import getStroke from "perfect-freehand";

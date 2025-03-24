@@ -1,4 +1,4 @@
-import { drawHandle } from "@/components/utils/elements";
+import { drawHandle } from "@/Geometry/elements/draw";
 import { RectangleElement } from "@/types/types";
 
 export const createRectangle = (

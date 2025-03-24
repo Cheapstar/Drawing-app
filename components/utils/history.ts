@@ -34,7 +34,19 @@ export const useHistory = (
 
   const undo = () => {
     if (index > 0) {
-      setIndex((prevIndex) => prevIndex - 1);
+      const newIndex = index - 1;
+      const prevElements = history[newIndex];
+
+      // Restore opacity if needed
+      prevElements.forEach((element) => {
+        element.opacity = 1;
+      });
+
+      // First update the index
+      setIndex(newIndex);
+
+      // Then update the state with overwrite
+      setState(prevElements, true);
     }
   };
 

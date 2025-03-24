@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import React, {
@@ -33,8 +34,8 @@ import {
   TextElement,
 } from "@/types/types";
 import { HistoryState, useHistory } from "./utils/history";
-import { point } from "./utils/position";
-import { adjustElementCoordinates } from "./utils/elements";
+import { point } from "@/Geometry/utils";
+import { adjustElementCoordinates } from "@/Geometry/utils";
 import { drawElement } from "@/Geometry/elements/draw";
 
 import { handleElementSelection } from "@/Geometry/elements/selection";
@@ -53,7 +54,6 @@ import {
 import { TOOLS } from "@/Constants";
 import { useZoom } from "./utils/useZoom";
 import { usePan } from "./utils/usePan";
-import { getTheBoundingElement } from "@/Geometry/elements/boundingElement";
 import { getTextElementDetails } from "@/Geometry/text/boundingElement";
 
 type CursorAction =
@@ -74,7 +74,6 @@ export function WhiteBoard() {
     setPanOffSet,
     startPanMousePosition,
     setStartPanMousePosition,
-    setExpand,
   } = usePan();
 
   const [eraseElements, setEraseElements] = useState<Element[]>([]);
@@ -87,7 +86,7 @@ export function WhiteBoard() {
   const [cursorAction, setCursorAction] = useState<CursorAction>();
 
   const boardRef = useRef<HTMLCanvasElement>(null);
-  const textElementRef = useRef<HTMLTextAreaElement>(null);
+  const textElementRef = useRef<HTMLDivElement>(null);
 
   const { scale, scaleOffset, setScaleOffset, onZoom } = useZoom();
   const [drawingElement, setDrawingElement] = useState<Element | null>(null);
@@ -261,6 +260,10 @@ export function WhiteBoard() {
       fontSize,
       fontFamily,
       breaks: [],
+      x2: clientX,
+      y2: clientY,
+      height: 0,
+      width: 0,
     };
 
     setDrawingElement(newElement);
@@ -340,7 +343,9 @@ export function WhiteBoard() {
         setSelectedElement,
         setEraseElements,
         setAction,
-        updateElement
+        updateElement,
+        scale,
+        boardRef as React.RefObject<HTMLCanvasElement>
       );
       return;
     }
@@ -459,7 +464,9 @@ export function WhiteBoard() {
         elements,
         eraseElements,
         setEraseElements,
-        updateElement
+        updateElement,
+        scale,
+        boardRef as React.RefObject<HTMLCanvasElement>
       );
       return;
     }
@@ -504,8 +511,8 @@ export function WhiteBoard() {
               x2: newX2,
               y2: newY2,
               controlPoint: {
-                x: (newX1 + newX2) / 2,
-                y: (newY1 + newY2) / 2,
+                x: ((newX1 as number) + (newX2 as number)) / 2,
+                y: ((newY1 as number) + (newY2 as number)) / 2,
               },
             },
           },
@@ -706,32 +713,35 @@ export function WhiteBoard() {
 
       {/* Text input area */}
       {action === "writing" && drawingElement && (
-        <textarea
+        <div
+          contentEditable
           onBlur={handleBlur}
           ref={textElementRef}
-          className="fixed focus:outline-none resize-none z-[1000] h-full w-full"
+          className="fixed focus:outline-none z-[1000] h-auto w-auto"
           style={{
             top:
               drawingElement.y1 * scale +
               panOffset.y * scale -
-              scaleOffset.y -
+              (scaleOffset?.y || 0) -
               10 * scale,
             left:
-              drawingElement.x1 * scale + panOffset.x * scale - scaleOffset.x,
+              drawingElement.x1 * scale +
+              panOffset.x * scale -
+              (scaleOffset?.x || 0),
             fontFamily: fontFamily,
             color: color,
             fontSize: fontSize * scale,
             transformOrigin: "top left",
           }}
-          onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => {
+          onInput={(event: React.FormEvent<HTMLDivElement>) => {
             if (drawingElement.type === "text") {
               setDrawingElement({
                 ...drawingElement,
-                text: event.target.value,
+                text: event.currentTarget.innerText,
               });
             }
           }}
-          onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+          onKeyDown={(event: React.KeyboardEvent<HTMLDivElement>) => {
             if (event.key === "Enter") {
               if (drawingElement.type === "text") {
                 const newBreaks = [...(drawingElement as TextElement).breaks];
@@ -740,11 +750,12 @@ export function WhiteBoard() {
                 setDrawingElement({
                   ...drawingElement,
                   breaks: newBreaks,
+                  text: drawingElement.text + "\n", // Add a new line to the text
                 });
               }
             }
           }}
-        />
+        ></div>
       )}
 
       {/* Canvas */}

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { nearPoint } from "@/components/utils/position";
+import { nearPoint } from "@/Geometry/utils";
 import { CURSOR_RANGE } from "@/Constants";
 import { BoundingElement, Point, RectangleElement } from "@/types/types";
 

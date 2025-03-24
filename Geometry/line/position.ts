@@ -1,9 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import {
-  nearPoint,
-  quadraticBezierMidpoint,
-} from "@/components/utils/position";
+import { nearPoint, quadraticBezierMidpoint } from "@/Geometry/utils";
 import { CURSOR_RANGE } from "@/Constants";
 import { BoundingElement, LineElement, Point } from "@/types/types";
 

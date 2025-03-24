@@ -16,7 +16,7 @@
 
         */
 
-import { getElementAtPosition } from "@/components/utils/position";
+import { getElementAtPosition } from "@/Geometry/utils";
 import { Action, Element, Point } from "@/types/types";
 import { positionWithinBoundingElement } from "./position";
 import { getTheOffsets } from "../utils";

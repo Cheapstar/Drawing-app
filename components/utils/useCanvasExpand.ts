@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Action, Point } from "@/types/types";
 import React, { useEffect, useRef } from "react";
 

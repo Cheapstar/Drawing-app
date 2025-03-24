@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
-import { point } from "../utils/position";
+import { point } from "@/Geometry/utils";
 
 export function usePan() {
   const [panOffset, setPanOffSet] = useState(point(0, 0));
   const [startPanMousePosition, setStartPanMousePosition] = useState(
     point(0, 0)
   );
-
-  const [expand, setExpand] = useState<boolean>(false);
 
   // Handle wheel events for panning
   useEffect(() => {
@@ -29,6 +27,5 @@ export function usePan() {
     setPanOffSet,
     startPanMousePosition,
     setStartPanMousePosition,
-    setExpand,
   };
 }

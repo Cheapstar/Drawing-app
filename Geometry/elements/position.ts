@@ -1,4 +1,4 @@
-import { nearPoint } from "@/components/utils/position";
+import { nearPoint } from "@/Geometry/utils";
 import { CURSOR_RANGE } from "@/Constants";
 import { BoundingElement, Element, Point } from "@/types/types";
 import { getTheBoundingElement } from "./boundingElement";

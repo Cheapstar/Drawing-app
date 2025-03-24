@@ -1,6 +1,6 @@
 import { FreehandElement, Point } from "@/types/types";
 
-import { adjustElementCoordinates } from "@/components/utils/elements";
+import { adjustElementCoordinates } from "@/Geometry/utils";
 
 export function handleFreehandResize(
   client: Point,
@@ -20,10 +20,10 @@ export function handleFreehandResize(
       ...selectedElement,
       stroke: updatedStrokes,
       originalStroke: updatedStrokes,
-      x1: newX1,
-      y1: newY1,
-      x2: newX2,
-      y2: newY2,
+      x1: newX1 as number,
+      y1: newY1 as number,
+      x2: newX2 as number,
+      y2: newY2 as number,
     });
 
     return;
@@ -81,8 +81,8 @@ export function handleFreehandResize(
   const originalBounds = calculateBounds(originalStroke);
 
   // Calculate new bounding box based on the new dimensions
-  const newWidth = newX2 - newX1;
-  const newHeight = newY2 - newY1;
+  const newWidth = (newX2 as number) - newX1;
+  const newHeight = (newY2 as number) - newY1;
 
   // Calculate scale ratios from original bounds to new dimensions
   const finalScaleX = newWidth / (originalBounds.maxX - originalBounds.minX);

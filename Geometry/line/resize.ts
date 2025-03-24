@@ -2,7 +2,7 @@ import {
   getNewControlPoints,
   point,
   quadraticBezierMidpoint,
-} from "@/components/utils/position";
+} from "@/Geometry/utils";
 import { LineElement, Point } from "@/types/types";
 
 export function handleLineResize(

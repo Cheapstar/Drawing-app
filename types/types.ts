@@ -129,8 +129,8 @@ export interface FreehandElement extends BaseElement {
   type: "freehand";
   x1: number;
   y1: number;
-  x2: number;
-  y2: number;
+  x2?: number;
+  y2?: number;
   stroke: number[][];
   originalStroke: number[][];
   path?: Path2D;

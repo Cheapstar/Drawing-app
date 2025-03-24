@@ -1,4 +1,4 @@
-import { getElementAtPosition } from "@/components/utils/position";
+import { getElementAtPosition } from "@/Geometry/utils";
 import { Point, Element, Action } from "@/types/types";
 
 export function handleEraser(
@@ -12,10 +12,18 @@ export function handleEraser(
   updateElement: (
     index: number,
     elementProps: Partial<Element> & { id: string }
-  ) => void
+  ) => void,
+  scale: number,
+  boardRef: React.RefObject<HTMLCanvasElement>
 ) {
   setSelectedElement(null);
-  const element = getElementAtPosition(client.x, client.y, elements);
+  const element = getElementAtPosition(
+    client.x,
+    client.y,
+    elements,
+    scale,
+    boardRef
+  );
   console.log("Erased Element", element);
 
   setAction("erasing");
@@ -46,9 +54,17 @@ export function handleEraserMove(
   updateElement: (
     index: number,
     elementProps: Partial<Element> & { id: string }
-  ) => void
+  ) => void,
+  scale: number,
+  boardRef: React.RefObject<HTMLCanvasElement>
 ) {
-  const element = getElementAtPosition(client.x, client.y, elements);
+  const element = getElementAtPosition(
+    client.x,
+    client.y,
+    elements,
+    scale,
+    boardRef
+  );
 
   console.log("Element to be erased is", element);
 

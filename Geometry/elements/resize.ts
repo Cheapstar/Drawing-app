@@ -2,7 +2,7 @@ import { Action, Element, Point } from "@/types/types";
 import { handleFreehandResize } from "../freehand/resize";
 import { handleLineResize } from "../line/resize";
 import { handleRectResize } from "../rectangle/resize";
-import { adjustElementCoordinates } from "@/components/utils/elements";
+import { adjustElementCoordinates } from "@/Geometry/utils";
 import { handleTextResize } from "../text/resize";
 
 export function handleElementResize(

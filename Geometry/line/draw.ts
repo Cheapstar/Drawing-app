@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { drawHandle } from "@/components/utils/elements";
-import { quadraticBezierMidpoint } from "@/components/utils/position";
+import { drawHandle } from "@/Geometry/elements/draw";
+import { quadraticBezierMidpoint } from "@/Geometry/utils";
 import { LineElement } from "@/types/types";
 
 // Drawing on the Canvas

@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { RoughCanvas } from "roughjs/bin/canvas";
 import { BoundingElement, Element, LineElement } from "@/types/types";
 import { createFreeHand } from "@/Geometry/freehand/draw";
 import { createLine } from "@/Geometry/line/draw";
 import { createRectangle } from "@/Geometry/rectangle/draw";
-import { quadraticBezierMidpoint } from "@/components/utils/position";
+import { quadraticBezierMidpoint } from "@/Geometry/utils";
 import { getTheBoundingElement } from "./boundingElement";
 import { drawText } from "../text/draw";
 
