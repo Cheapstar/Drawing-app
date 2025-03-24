@@ -1,25 +1,30 @@
 import {
   Point,
-  SelectedPosition,
   Element,
   LineElement,
   RectangleElement,
-  FreehandElement,
+  TextElement,
 } from "@/types/types";
-import { BoundingElement } from "../WhiteBoard";
 import { checkOnline } from "@/Geometry/line/position";
 import { checkOnRectangle } from "@/Geometry/rectangle/position";
 import { checkOnFreehand } from "@/Geometry/freehand/position";
+import { checkOnText } from "@/Geometry/text/position";
 export const getElementAtPosition = (
   clientX: number,
   clientY: number,
   elements: Element[],
-  scale?: number
+  scale?: number,
+  boardRef?: React.RefObject<HTMLCanvasElement>
 ): Partial<Element> | undefined => {
   let result: boolean = false;
 
   const foundElement = elements.find((element: Element) => {
-    result = checkOnElements(point(clientX, clientY), element, scale as number);
+    result = checkOnElements(
+      point(clientX, clientY),
+      element,
+      scale as number,
+      boardRef
+    );
     return result;
   });
 
@@ -31,7 +36,8 @@ export const getElementAtPosition = (
 export const checkOnElements = (
   client: Point,
   element: Element,
-  scale?: number
+  scale?: number,
+  boardRef?: React.RefObject<HTMLCanvasElement>
 ): boolean => {
   switch (element.type) {
     case "rectangle":
@@ -45,7 +51,11 @@ export const checkOnElements = (
     case "freehand":
       return checkOnFreehand(client, element) as boolean;
     case "text":
-
+      return checkOnText(
+        client,
+        element as TextElement,
+        boardRef as React.RefObject<HTMLCanvasElement>
+      );
     default:
       return false;
   }

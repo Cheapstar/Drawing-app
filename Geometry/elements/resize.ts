@@ -3,16 +3,18 @@ import { handleFreehandResize } from "../freehand/resize";
 import { handleLineResize } from "../line/resize";
 import { handleRectResize } from "../rectangle/resize";
 import { adjustElementCoordinates } from "@/components/utils/elements";
+import { handleTextResize } from "../text/resize";
 
 export function handleElementResize(
   client: Point,
   selectedElement: Element,
   setSelectedElement: (ele: Element) => void
 ) {
-  if (selectedElement.type === "text") return;
-
   // All for line
   switch (selectedElement.type) {
+    case "text":
+      handleTextResize(client, selectedElement, setSelectedElement);
+      return;
     case "line":
       handleLineResize(client, selectedElement, setSelectedElement);
       return;
@@ -21,7 +23,6 @@ export function handleElementResize(
       return;
     case "freehand":
       handleFreehandResize(client, selectedElement, setSelectedElement);
-
       return;
   }
 }
@@ -46,17 +47,17 @@ export function finalizeResizeAndMoving(
     // Replace the element at the index with the selectedElement
     updatedElements[index] = {
       ...selectedElement,
-      x1: newX1,
-      y1: newY1,
-      x2: newX2,
-      y2: newY2,
+      x1: newX1 as number,
+      y1: newY1 as number,
+      x2: newX2 as number,
+      y2: newY2 as number,
     };
     setSelectedElement({
       ...selectedElement,
-      x1: newX1,
-      y1: newY1,
-      x2: newX2,
-      y2: newY2,
+      x1: newX1 as number,
+      y1: newY1 as number,
+      x2: newX2 as number,
+      y2: newY2 as number,
     });
 
     // Update the elements state

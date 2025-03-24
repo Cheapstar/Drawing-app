@@ -6,9 +6,10 @@ export function handleLineSelection(
   client: Point,
   selectedElement: LineElement,
   setSelectedElement: (ele: LineElement) => void,
-  setAction: (act: Action) => void
+  setAction: (act: Action) => void,
+  scale: number
 ) {
-  const result = selectedPositionOnLine(selectedElement, client);
+  const result = selectedPositionOnLine(selectedElement, client, scale);
 
   if (result) {
     setSelectedElement({

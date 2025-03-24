@@ -37,7 +37,8 @@ export function checkOnline(
 
 export function selectedPositionOnLine(
   selectedElement: LineElement,
-  client: Point
+  client: Point,
+  scale: number
 ) {
   // We Need To check is it on the corners or on the middle or else where
 
@@ -48,7 +49,8 @@ export function selectedPositionOnLine(
     selectedElement.x1,
     selectedElement.y1,
     client.x,
-    client.y
+    client.y,
+    CURSOR_RANGE / scale
   )
     ? "start"
     : null;
@@ -57,13 +59,20 @@ export function selectedPositionOnLine(
     selectedElement.x2,
     selectedElement.y2,
     client.x,
-    client.y
+    client.y,
+    CURSOR_RANGE / scale
   )
     ? "end"
     : null;
 
   const midPoints = quadraticBezierMidpoint(selectedElement);
-  const onMiddle = nearPoint(midPoints.x, midPoints.y, client.x, client.y)
+  const onMiddle = nearPoint(
+    midPoints.x,
+    midPoints.y,
+    client.x,
+    client.y,
+    CURSOR_RANGE / scale
+  )
     ? "middle"
     : null;
 

@@ -53,6 +53,8 @@ import {
 import { TOOLS } from "@/Constants";
 import { useZoom } from "./utils/useZoom";
 import { usePan } from "./utils/usePan";
+import { getTheBoundingElement } from "@/Geometry/elements/boundingElement";
+import { getTextElementDetails } from "@/Geometry/text/boundingElement";
 
 type CursorAction =
   | "vertical"
@@ -358,7 +360,8 @@ export function WhiteBoard() {
         elements,
         setSelectedElement,
         setAction,
-        scale
+        scale,
+        boardRef as React.RefObject<HTMLCanvasElement>
       );
 
       return;
@@ -586,15 +589,11 @@ export function WhiteBoard() {
     ctx.font = `${fontSize}px ${fontFamily}`;
 
     const text = drawingElement.text || "";
-    const metrics = ctx.measureText(text);
-    const height =
-      drawingElement?.fontSize * (drawingElement.breaks.length + 1);
 
     const updatedElement: TextElement = {
       ...drawingElement,
       text,
-      x2: drawingElement.x1 + metrics.width,
-      y2: drawingElement.y1 + height,
+      ...getTextElementDetails(drawingElement, ctx),
     };
 
     setElements([...elements, updatedElement]);

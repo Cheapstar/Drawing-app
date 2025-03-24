@@ -8,12 +8,12 @@ export const checkOnRectangle = (
   element: RectangleElement,
   scale: number
 ) => {
-  const { x1, x2, y1, y2 } = element;
+  const { x1, x2, y1, y2, strokeWidth } = element;
 
   if (!(client.x >= x1 && client.x <= x2 && client.y >= y1 && client.y <= y2))
     return false;
 
-  const threshold = 50;
+  const threshold = (strokeWidth as number) / scale;
 
   const top =
     client.x >= x1 - threshold &&

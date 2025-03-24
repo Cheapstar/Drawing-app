@@ -28,7 +28,8 @@ export function handleElementSelection(
   elements: Element[],
   setSelectedElement: (ele: Element | null) => void,
   setAction: (act: Action) => void,
-  scale: number
+  scale: number,
+  boardRef: React.RefObject<HTMLCanvasElement>
 ) {
   console.log("Selected Element is", selectedElement);
 
@@ -36,7 +37,8 @@ export function handleElementSelection(
     client.x,
     client.y,
     elements,
-    scale
+    scale,
+    boardRef
   );
   // element exists but no element is selected or different element is getting selected
   if (
@@ -54,7 +56,8 @@ export function handleElementSelection(
         client,
         selectedElement,
         setSelectedElement,
-        setAction
+        setAction,
+        scale
       )
     ) {
       return;
@@ -64,18 +67,24 @@ export function handleElementSelection(
       selectedElement &&
       (selectedElement.type === "freehand" ||
         selectedElement.type == "rectangle" ||
-        (selectedElement.type === "line" && selectedElement.isCurved))
+        (selectedElement.type === "line" && selectedElement.isCurved) ||
+        selectedElement.type === "text")
     ) {
       // check if it is inside or on the edges or corner
       const selectedPos = positionWithinBoundingElement(
         client,
-        selectedElement
+        selectedElement,
+        boardRef.current.getContext("2d") as CanvasRenderingContext2D,
+        scale
       );
+
+      console.log("Selected Pos is", selectedElement);
+
       if (selectedPos != "none") {
         if (selectedPos === "inside") {
           const offset = getTheOffsets(selectedElement, client);
 
-          console.log("Selected Element is ", selectedElement);
+          console.log("Moving");
           setSelectedElement({
             ...selectedElement,
             selectedPosition: "inside",

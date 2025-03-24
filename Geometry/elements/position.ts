@@ -5,24 +5,33 @@ import { getTheBoundingElement } from "./boundingElement";
 
 export function positionWithinBoundingElement(
   client: Point,
-  selectedElement: Element
+  selectedElement: Element,
+  ctx: CanvasRenderingContext2D,
+  scale: number
 ) {
   const { x1, x2, y1, y2 } = getTheBoundingElement(
-    selectedElement as Element
+    selectedElement as Element,
+    ctx
   ) as BoundingElement;
 
-  const threshold = CURSOR_RANGE;
+  const threshold = CURSOR_RANGE / scale;
   // Checking on the corners
-  const topLeft = nearPoint(x1, y1, client.x, client.y, CURSOR_RANGE)
+  const topLeft = nearPoint(x1, y1, client.x, client.y, CURSOR_RANGE / scale)
     ? "tl"
     : null;
-  const bottomLeft = nearPoint(x1, y2, client.x, client.y, CURSOR_RANGE)
+  const bottomLeft = nearPoint(x1, y2, client.x, client.y, CURSOR_RANGE / scale)
     ? "bl"
     : null;
-  const topRight = nearPoint(x2, y1, client.x, client.y, CURSOR_RANGE)
+  const topRight = nearPoint(x2, y1, client.x, client.y, CURSOR_RANGE / scale)
     ? "tr"
     : null;
-  const bottomRight = nearPoint(x2, y2, client.x, client.y, CURSOR_RANGE)
+  const bottomRight = nearPoint(
+    x2,
+    y2,
+    client.x,
+    client.y,
+    CURSOR_RANGE / scale
+  )
     ? "br"
     : null;
 

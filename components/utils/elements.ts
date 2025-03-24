@@ -1,5 +1,12 @@
-import { Element, LineElement, RectangleElement, Shapes } from "@/types/types";
+import {
+  Element,
+  LineElement,
+  RectangleElement,
+  Shapes,
+  TextElement,
+} from "@/types/types";
 import { quadraticBezierMidpoint } from "./position";
+import { getTheBoundingElement } from "@/Geometry/elements/boundingElement";
 
 export const adjustElementCoordinates = (element: Element) => {
   const { type } = element;
@@ -87,6 +94,19 @@ export const adjustElementCoordinates = (element: Element) => {
       newY2: maxY,
     };
   } else if (type === "text") {
+    const { x1, y1, height, width } = element as TextElement;
+
+    const newX1 = x1,
+      newX2 = x1 + width,
+      newY1 = y1,
+      newY2 = y1 + height;
+
+    return {
+      newX1,
+      newY1,
+      newX2,
+      newY2,
+    };
   }
 
   // Return the original element if it's not a line
