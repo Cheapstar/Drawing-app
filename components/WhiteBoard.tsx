@@ -57,6 +57,8 @@ import { usePan } from "./utils/usePan";
 import { getTextElementDetails } from "@/Geometry/text/boundingElement";
 import { deleteElement } from "@/Geometry/elements/deleteElement";
 import { ImSpinner, ImSpinner2 } from "react-icons/im";
+import { SideMenu } from "./SideMenu";
+import { checkOnText } from "@/Geometry/text/position";
 
 type CursorAction =
   | "vertical"
@@ -90,9 +92,13 @@ export function WhiteBoard() {
 
   const boardRef = useRef<HTMLCanvasElement>(null);
   const textElementRef = useRef<HTMLDivElement>(null);
+  const updatingElementRef = useRef<HTMLDivElement>(null);
 
   const { scale, scaleOffset, setScaleOffset, onZoom } = useZoom();
   const [drawingElement, setDrawingElement] = useState<Element | null>(null);
+
+  const [updatingElement, setUpdatingElement] = useState<Element | null>();
+  const [updating, setUpdating] = useState<boolean>(false);
 
   // Focus textarea when writing text
   useEffect(() => {
@@ -100,10 +106,44 @@ export function WhiteBoard() {
       setTimeout(() => {
         if (textElementRef.current) {
           textElementRef.current.focus();
+          const range = document.createRange();
+          const selection = window.getSelection();
+          range.selectNodeContents(textElementRef.current);
+          range.collapse(false);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
         }
-      }, 0);
+      }, 10);
     }
   }, [action]);
+
+  useEffect(() => {
+    if (updatingElement && updating) {
+      setTimeout(() => {
+        if (updatingElementRef.current) {
+          const { text } = updatingElement as TextElement;
+
+          const lines = text?.split("\n") as string[];
+          console.log("Text is", updatingElement);
+
+          for (const line of lines) {
+            const lineContainer = document.createElement("div");
+            lineContainer.innerText = line;
+            updatingElementRef.current.appendChild(lineContainer);
+          }
+
+          updatingElementRef.current.focus();
+          const range = document.createRange();
+          const selection = window.getSelection();
+          range.selectNodeContents(updatingElementRef.current);
+          range.collapse(false);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+          setUpdating(false);
+        }
+      }, 10);
+    }
+  }, [updatingElement, updatingElementRef, updating]);
 
   // Handle canvas resizing
   const resizeCanvas = useCallback(() => {
@@ -178,12 +218,18 @@ export function WhiteBoard() {
       drawElement(rc, ctx, drawingElement);
     }
 
+    if (updatingElement) {
+      drawElement(rc, ctx, updatingElement);
+    }
+
     // Draw all elements
     elements.forEach((element: Element) => {
       if (selectedElement && element.id === selectedElement.id) {
         drawElement(rc, ctx, selectedElement);
         return;
       }
+
+      if (updatingElement && updatingElement.id === element.id) return;
       drawElement(rc, ctx, element);
     });
 
@@ -196,7 +242,16 @@ export function WhiteBoard() {
     }
 
     ctx.restore();
-  }, [elements, selectedElement, panOffset, scale, action, drawingElement]);
+  }, [
+    elements,
+    selectedElement,
+    panOffset,
+    scale,
+    action,
+    drawingElement,
+    resizeCanvas,
+    updatingElement,
+  ]);
 
   function getLineWidth(scale: number) {
     if (scale >= 1) return 1.5;
@@ -584,7 +639,7 @@ export function WhiteBoard() {
   };
 
   // Handle text input blur (finalize text element)
-  const handleBlur = () => {
+  const handleDrawingTextBlur = () => {
     if (
       !drawingElement ||
       drawingElement.type !== "text" ||
@@ -592,24 +647,25 @@ export function WhiteBoard() {
     )
       return;
 
-    const ctx = boardRef.current?.getContext("2d");
-    if (!ctx) return;
+    if (drawingElement.text != "" && drawingElement.text != "\n") {
+      const ctx = boardRef.current?.getContext("2d");
+      if (!ctx) return;
 
-    ctx.save();
-    ctx.font = `${fontSize}px ${fontFamily}`;
+      ctx.save();
+      ctx.font = `${fontSize}px ${fontFamily}`;
 
-    const text = drawingElement.text || "";
+      const text = drawingElement.text || "";
 
-    const updatedElement: TextElement = {
-      ...drawingElement,
-      text,
-      ...getTextElementDetails(drawingElement, ctx),
-    };
+      const updatedElement: TextElement = {
+        ...drawingElement,
+        text,
+        ...getTextElementDetails(drawingElement, ctx),
+      };
 
-    setElements([...elements, updatedElement]);
+      setElements([...elements, updatedElement]);
 
-    ctx.restore();
-    console.log("Drawing Element is", drawingElement);
+      ctx.restore();
+    }
 
     setDrawingElement(null);
     setTool("select");
@@ -632,6 +688,7 @@ export function WhiteBoard() {
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (!selectedElement) return;
+    if (updatingElement) return;
 
     console.log("Deleting the Element");
 
@@ -648,11 +705,97 @@ export function WhiteBoard() {
     };
   }, [selectedElement]);
 
+  const handleUpdatingTextBlur = () => {
+    if (
+      !updatingElement ||
+      updatingElement.type !== "text" ||
+      !updatingElementRef.current
+    )
+      return;
+
+    if (updatingElement.text === "" || updatingElement.text === "\n") {
+      deleteElement(elements, updatingElement, setUpdatingElement, setElements);
+    } else {
+      const ctx = boardRef.current?.getContext("2d");
+      if (!ctx) return;
+
+      ctx.save();
+      ctx.font = `${fontSize}px ${fontFamily}`;
+
+      const text = updatingElement.text || "";
+
+      const updatedElement: TextElement = {
+        ...updatingElement,
+        text,
+        ...getTextElementDetails(updatingElement, ctx),
+      };
+
+      const newElements = [...elements];
+
+      const index = newElements.findIndex((ele) => {
+        return updatingElement.id === ele.id;
+      });
+
+      newElements[index] = updatedElement;
+
+      setElements(newElements);
+
+      ctx.restore();
+      setUpdatingElement(null);
+    }
+
+    setTool("select");
+    setAction("selecting");
+  };
+
+  const handleDoubleClick = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const { x: clientX, y: clientY } = getMouseCoordinates(event);
+
+    // Check if the click is on the selected Element or not
+    if (
+      selectedElement &&
+      selectedElement.type === "text" &&
+      checkOnText(
+        point(clientX, clientY),
+        selectedElement,
+        boardRef as React.RefObject<HTMLCanvasElement>
+      )
+    ) {
+      setUpdatingElement(selectedElement);
+      setUpdating(true);
+      setSelectedElement(null);
+      return;
+    }
+
+    // check is element selected
+    if (tool === "select") {
+      createTextElement(clientX, clientY);
+      return;
+    }
+  };
+
   return (
     <div
       onPointerUp={handlePointerUp}
       className="relative z-0"
     >
+      {/*Side Menu */}
+      <div
+        className="fixed flex top-3 left-3 items-center gap-2"
+        style={{
+          cursor:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "not-allowed"
+              : "default",
+          pointerEvents:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "none"
+              : "auto",
+        }}
+      >
+        <SideMenu></SideMenu>
+      </div>
+
       {/* Toolbar */}
       <div
         className="fixed flex top-4 left-1/2 -translate-x-1/2 items-center gap-2"
@@ -714,29 +857,38 @@ export function WhiteBoard() {
       </div>
 
       {/* Menu */}
-      <div
-        className={`fixed top-28 left-5 p-4 rounded-md shadow-lg ${
-          darkMode ? "bg-[#232329] text-white" : "bg-white text-black "
-        }`}
-        style={{
-          cursor:
-            action === "resizing" || action === "drawing" || action === "moving"
-              ? "not-allowed"
-              : "default",
-          pointerEvents:
-            action === "resizing" || action === "drawing" || action === "moving"
-              ? "none"
-              : "auto",
-        }}
-      >
-        <Menu darkMode={darkMode} />
-      </div>
+      {(tool === "freehand" ||
+        tool === "line" ||
+        tool === "rectangle" ||
+        tool === "text") && (
+        <div
+          className={`fixed top-28 left-5 p-4 rounded-md shadow-lg ${
+            darkMode ? "bg-[#232329] text-white" : "bg-white text-black "
+          }`}
+          style={{
+            cursor:
+              action === "resizing" ||
+              action === "drawing" ||
+              action === "moving"
+                ? "not-allowed"
+                : "default",
+            pointerEvents:
+              action === "resizing" ||
+              action === "drawing" ||
+              action === "moving"
+                ? "none"
+                : "auto",
+          }}
+        >
+          <Menu darkMode={darkMode} />
+        </div>
+      )}
 
       {/* Text input area */}
       {action === "writing" && drawingElement && (
         <div
           contentEditable
-          onBlur={handleBlur}
+          onBlur={handleDrawingTextBlur}
           ref={textElementRef}
           className="fixed focus:outline-none z-[1000] h-auto w-auto"
           style={{
@@ -762,20 +914,6 @@ export function WhiteBoard() {
               });
             }
           }}
-          onKeyDown={(event: React.KeyboardEvent<HTMLDivElement>) => {
-            if (event.key === "Enter") {
-              if (drawingElement.type === "text") {
-                const newBreaks = [...(drawingElement as TextElement).breaks];
-                newBreaks.push((drawingElement.text as string).length);
-
-                setDrawingElement({
-                  ...drawingElement,
-                  breaks: newBreaks,
-                  text: drawingElement.text + "\n", // Add a new line to the text
-                });
-              }
-            }
-          }}
         ></div>
       )}
 
@@ -785,11 +923,65 @@ export function WhiteBoard() {
         </div>
       )}
 
+      {/* Updating the Element */}
+      {updatingElement && updatingElement.type === "text" && (
+        <div
+          contentEditable
+          onBlur={handleUpdatingTextBlur}
+          ref={updatingElementRef}
+          className="fixed focus:outline-none z-[1000] h-auto w-auto"
+          style={{
+            top:
+              updatingElement.y1 * scale +
+              panOffset.y * scale -
+              (scaleOffset?.y || 0) -
+              10 * scale,
+            left:
+              updatingElement.x1 * scale +
+              panOffset.x * scale -
+              (scaleOffset?.x || 0),
+            fontFamily: updatingElement.fontFamily,
+            color: updatingElement.color,
+            fontSize: (updatingElement.fontSize as number) * scale,
+            transformOrigin: "top left",
+          }}
+          onInput={(event: React.FormEvent<HTMLDivElement>) => {
+            if (updatingElement.type === "text") {
+              console.log("The Text is", updatingElement.text);
+              const sanitizedText = event.currentTarget.innerText.replace(
+                /\n\n/g,
+                "\n"
+              );
+              setUpdatingElement({
+                ...updatingElement,
+                text: sanitizedText,
+              });
+            }
+          }}
+          onKeyDown={(event: React.KeyboardEvent<HTMLDivElement>) => {
+            if (event.key === "Enter") {
+              if (updatingElement.type === "text") {
+                const sanitizedText = event.currentTarget.innerText.replace(
+                  /\n\n/g,
+                  "\n"
+                );
+
+                setDrawingElement({
+                  ...updatingElement,
+                  text: sanitizedText + "\u00A0",
+                });
+              }
+            }
+          }}
+        ></div>
+      )}
+
       {/* Canvas */}
       <canvas
         ref={boardRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onDoubleClick={handleDoubleClick}
         className={`${darkMode ? "bg-black" : "bg-white"} -z-10`}
         style={{ cursor: getCursorForTool() }}
       />

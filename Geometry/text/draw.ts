@@ -1,7 +1,7 @@
 import { TextElement } from "@/types/types";
 
 export function drawText(ctx: CanvasRenderingContext2D, element: TextElement) {
-  const { x1, y1, text, color, fontSize, fontFamily, breaks } = element;
+  const { x1, y1, text, color, fontSize, fontFamily } = element;
 
   ctx.textBaseline = "top";
   ctx.textRendering = "geometricPrecision";
@@ -11,15 +11,7 @@ export function drawText(ctx: CanvasRenderingContext2D, element: TextElement) {
   }
   ctx.font = `${fontSize}px ${fontFamily}`;
 
-  const lines = [];
-
-  let breakPos = 0;
-  for (let i = 0; i < breaks.length; i++) {
-    lines.push(text?.slice(breakPos, breaks[i]) || "");
-    breakPos = breaks[i] + 1;
-  }
-
-  lines.push(text?.slice(breakPos) || "");
+  const lines = text?.split("\n") as string[];
 
   for (let i = 0; i < lines.length; i++) {
     ctx.fillText(

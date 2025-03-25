@@ -5,7 +5,7 @@ export function checkOnText(
   element: TextElement,
   boardRef: React.RefObject<HTMLCanvasElement>
 ) {
-  const { x1, y1, text, fontSize, fontFamily, breaks } = element;
+  const { x1, y1, text, fontSize, fontFamily } = element;
   if (!boardRef.current) return false;
 
   const ctx = boardRef.current.getContext("2d");
@@ -13,14 +13,7 @@ export function checkOnText(
 
   ctx.font = `${fontSize}px ${fontFamily}`;
 
-  const lines: string[] = [];
-  let breakPos = 0;
-
-  for (let i = 0; i < breaks.length; i++) {
-    lines.push(text?.slice(breakPos, breaks[i]) || "");
-    breakPos = breaks[i] + 2;
-  }
-  lines.push(text?.slice(breakPos) || "");
+  const lines = text?.split("\n") as string[];
 
   // Find the longest line for width calculation
   const longestLine = lines.reduce((a, b) =>
