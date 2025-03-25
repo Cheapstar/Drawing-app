@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
 import { point } from "@/Geometry/utils";
+import {
+  loadPanOffsetFromStorage,
+  savePanOffsetIntoStorage,
+} from "@/Geometry/storage";
 
 export function usePan() {
   const [panOffset, setPanOffSet] = useState(point(0, 0));
@@ -21,6 +25,17 @@ export function usePan() {
       document.removeEventListener("wheel", panFunction);
     };
   }, []);
+
+  useEffect(() => {
+    const savdPanOffset = loadPanOffsetFromStorage();
+    if (!savdPanOffset) return;
+
+    setPanOffSet(savdPanOffset);
+  }, []);
+
+  useEffect(() => {
+    savePanOffsetIntoStorage(panOffset);
+  }, [panOffset]);
 
   return {
     panOffset,

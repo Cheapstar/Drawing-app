@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { point } from "@/Geometry/utils";
+import { loadScaleFromStorage, saveScaleIntoStorage } from "@/Geometry/storage";
 
 export function useZoom() {
   const [scale, setScale] = useState(1);
   const [scaleOffset, setScaleOffset] = useState(point(0, 0));
 
   const onZoom = (delta: number) => {
-    if (delta === 0) return;
+    if (delta === 0) {
+      setScale(1);
+      return;
+    }
     setScale((prevState) => Math.min(Math.max(prevState + delta, 0.1), 2));
   };
 
@@ -91,6 +95,17 @@ export function useZoom() {
     handlePointerUp,
   ]);
 
+  useEffect(() => {
+    const savedScale = loadScaleFromStorage();
+    console.log("Saved Scale is", savedScale);
+    if (!scale) return;
+
+    setScale(savedScale);
+  }, []);
+
+  useEffect(() => {
+    saveScaleIntoStorage(scale);
+  }, [scale]);
   return {
     scale,
     setScale,

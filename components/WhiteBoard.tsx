@@ -56,6 +56,7 @@ import { useZoom } from "./utils/useZoom";
 import { usePan } from "./utils/usePan";
 import { getTextElementDetails } from "@/Geometry/text/boundingElement";
 import { deleteElement } from "@/Geometry/elements/deleteElement";
+import { ImSpinner, ImSpinner2 } from "react-icons/im";
 
 type CursorAction =
   | "vertical"
@@ -66,7 +67,8 @@ type CursorAction =
   | "none";
 
 export function WhiteBoard() {
-  const [elements, setElements, undo, redo] = useHistory([]);
+  const { elements, setElements, undo, redo, loadingSavedElements } =
+    useHistory([]);
   const [tool, setTool] = useAtom(toolAtom);
   const [action, setAction] = useState<Action>("none");
   const [selectedElement, setSelectedElement] = useState<Element | null>(null);
@@ -124,6 +126,21 @@ export function WhiteBoard() {
     return () => window.removeEventListener("resize", resizeCanvas);
   }, [resizeCanvas]);
 
+  // Add a separate effect to update scaleOffset only when scale or canvas size changes
+  useEffect(() => {
+    const canvas = boardRef.current;
+    if (!canvas) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const scaledWidth = (canvas.width * scale) / dpr;
+    const scaledHeight = (canvas.height * scale) / dpr;
+
+    const scaleOffsetX = (scaledWidth - canvas.width / dpr) / 2;
+    const scaleOffsetY = (scaledHeight - canvas.height / dpr) / 2;
+
+    setScaleOffset({ x: scaleOffsetX, y: scaleOffsetY });
+  }, [scale, boardRef.current?.width, boardRef.current?.height]);
+
   // Draw the canvas
   useLayoutEffect(() => {
     const canvas = boardRef.current;
@@ -180,21 +197,6 @@ export function WhiteBoard() {
 
     ctx.restore();
   }, [elements, selectedElement, panOffset, scale, action, drawingElement]);
-
-  // Add a separate effect to update scaleOffset only when scale or canvas size changes
-  useEffect(() => {
-    const canvas = boardRef.current;
-    if (!canvas) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const scaledWidth = (canvas.width * scale) / dpr;
-    const scaledHeight = (canvas.height * scale) / dpr;
-
-    const scaleOffsetX = (scaledWidth - canvas.width / dpr) / 2;
-    const scaleOffsetY = (scaledHeight - canvas.height / dpr) / 2;
-
-    setScaleOffset({ x: scaleOffsetX, y: scaleOffsetY });
-  }, [scale, boardRef.current?.width, boardRef.current?.height]);
 
   function getLineWidth(scale: number) {
     if (scale >= 1) return 1.5;
@@ -775,6 +777,12 @@ export function WhiteBoard() {
             }
           }}
         ></div>
+      )}
+
+      {loadingSavedElements && (
+        <div className="fixed inset-[50%] z-[10000]">
+          <ImSpinner2 className="text-6xl text-gray-300 animate-spin duration-75"></ImSpinner2>
+        </div>
       )}
 
       {/* Canvas */}

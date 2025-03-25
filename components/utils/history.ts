@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Element } from "@/types/types";
+import {
+  loadElementsFromStorage,
+  saveElementsIntoStorage,
+} from "@/Geometry/storage";
 
 export type HistoryState = Element[];
 export type SetHistoryState = (
@@ -7,16 +11,19 @@ export type SetHistoryState = (
   overWrite?: boolean
 ) => void;
 
-export const useHistory = (
-  initialState: HistoryState = []
-): [HistoryState, SetHistoryState, () => void, () => void] => {
+export const useHistory = (initialState: HistoryState = []) => {
   const [index, setIndex] = useState<number>(0);
   const [history, setHistory] = useState<HistoryState[]>([initialState]);
+  const [loadingSavedElements, setLoadingSavedElements] =
+    useState<boolean>(true);
 
   const setState: SetHistoryState = (action, overWrite = false) => {
     setHistory((prevHistory) => {
       const newState =
         typeof action === "function" ? action(prevHistory[index]) : action;
+
+      saveElementsIntoStorage(newState);
+
       if (overWrite) {
         const newHistory = [...prevHistory];
         newHistory[index] = newState;
@@ -80,5 +87,22 @@ export const useHistory = (
     };
   }, [handleKeyActions]);
 
-  return [history[index] || [], setState, undo, redo];
+  useEffect(() => {
+    const savedElements = loadElementsFromStorage();
+    if (!savedElements) {
+      setLoadingSavedElements(false);
+      return;
+    }
+
+    setState(savedElements);
+    setLoadingSavedElements(false);
+  }, []);
+
+  return {
+    elements: history[index] || [],
+    setElements: setState,
+    undo,
+    redo,
+    loadingSavedElements,
+  };
 };
