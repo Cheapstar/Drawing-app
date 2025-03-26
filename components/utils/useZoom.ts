@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { point } from "@/Geometry/utils";
-import { loadScaleFromStorage, saveScaleIntoStorage } from "@/Geometry/storage";
+import { loadScaleFromStorage, saveScaleIntoStorage } from "@/storage";
 
 export function useZoom() {
   const [scale, setScale] = useState(1);

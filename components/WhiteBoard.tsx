@@ -17,6 +17,7 @@ import {
   darkModeAtom,
   fontFamilyAtom,
   fontSizeAtom,
+  showShareModalAtom,
   strokeWidthAtom,
   toolAtom,
 } from "@/store/store";
@@ -59,6 +60,10 @@ import { deleteElement } from "@/Geometry/elements/deleteElement";
 import { ImSpinner, ImSpinner2 } from "react-icons/im";
 import { SideMenu } from "./SideMenu";
 import { checkOnText } from "@/Geometry/text/position";
+import { ShareButton } from "./ShareButton";
+import { ShareModal } from "./ShareModal";
+import { useSearchParams } from "next/navigation";
+import axios from "axios";
 
 type CursorAction =
   | "vertical"
@@ -69,8 +74,14 @@ type CursorAction =
   | "none";
 
 export function WhiteBoard() {
-  const { elements, setElements, undo, redo, loadingSavedElements } =
-    useHistory([]);
+  const {
+    elements,
+    setElements,
+    undo,
+    redo,
+    loadingSavedElements,
+    setLoadingSavedElements,
+  } = useHistory([]);
   const [tool, setTool] = useAtom(toolAtom);
   const [action, setAction] = useState<Action>("none");
   const [selectedElement, setSelectedElement] = useState<Element | null>(null);
@@ -94,11 +105,15 @@ export function WhiteBoard() {
   const textElementRef = useRef<HTMLDivElement>(null);
   const updatingElementRef = useRef<HTMLDivElement>(null);
 
-  const { scale, scaleOffset, setScaleOffset, onZoom } = useZoom();
+  const { scale, setScale, scaleOffset, setScaleOffset, onZoom } = useZoom();
   const [drawingElement, setDrawingElement] = useState<Element | null>(null);
 
   const [updatingElement, setUpdatingElement] = useState<Element | null>();
   const [updating, setUpdating] = useState<boolean>(false);
+
+  const [shareModal, setShareModal] = useAtom(showShareModalAtom);
+
+  const searchParams = useSearchParams();
 
   // Focus textarea when writing text
   useEffect(() => {
@@ -218,10 +233,6 @@ export function WhiteBoard() {
       drawElement(rc, ctx, drawingElement);
     }
 
-    if (updatingElement) {
-      drawElement(rc, ctx, updatingElement);
-    }
-
     // Draw all elements
     elements.forEach((element: Element) => {
       if (selectedElement && element.id === selectedElement.id) {
@@ -252,11 +263,6 @@ export function WhiteBoard() {
     resizeCanvas,
     updatingElement,
   ]);
-
-  function getLineWidth(scale: number) {
-    if (scale >= 1) return 1.5;
-    return 1.5 + (Math.abs(1 - scale) * 5 - Math.abs(scale));
-  }
 
   // Utility function to get mouse coordinates adjusted for pan and scale
   const getMouseCoordinates = (
@@ -774,6 +780,32 @@ export function WhiteBoard() {
     }
   };
 
+  useEffect(() => {
+    const id = searchParams.get("id");
+
+    if (!id) {
+      setLoadingSavedElements(false);
+      return;
+    }
+
+    console.log("Sending the request");
+    axios
+      .get("http://localhost:8080/fetch-elements", {
+        params: { id: id },
+      })
+      .then((response) => {
+        console.log("Loading the REsponse is", response);
+
+        setTimeout(() => {
+          setElements(response.data.elements);
+          setScale(response.data.scale);
+          setPanOffSet(response.data.panOffset);
+
+          setLoadingSavedElements(false);
+        }, 1000);
+      });
+  }, []);
+
   return (
     <div
       onPointerUp={handlePointerUp}
@@ -813,6 +845,42 @@ export function WhiteBoard() {
         <ToolBar />
         <DarkModeButton />
       </div>
+
+      {/*Share Button */}
+      <div
+        className="fixed right-5 top-4"
+        style={{
+          cursor:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "not-allowed"
+              : "default",
+          pointerEvents:
+            action === "resizing" || action === "drawing" || action === "moving"
+              ? "none"
+              : "auto",
+        }}
+      >
+        <ShareButton></ShareButton>
+      </div>
+
+      {/*Share Modal*/}
+      {shareModal && (
+        <div className="fixed w-full h-full z-[1000] flex justify-center items-center">
+          <div className="z-10  h-1/2 w-1/2 bg-white rounded-md p-4">
+            <ShareModal
+              elements={elements as Element[]}
+              panOffset={panOffset}
+              scale={scale}
+            ></ShareModal>
+          </div>
+          <div
+            className="fixed w-full h-full bg-black opacity-15 "
+            onClick={() => {
+              setShareModal(false);
+            }}
+          ></div>
+        </div>
+      )}
 
       {/* Undo/Redo Controls */}
       <div

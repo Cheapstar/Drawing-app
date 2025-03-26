@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { point } from "@/Geometry/utils";
-import {
-  loadPanOffsetFromStorage,
-  savePanOffsetIntoStorage,
-} from "@/Geometry/storage";
+import { loadPanOffsetFromStorage, savePanOffsetIntoStorage } from "@/storage";
 
 export function usePan() {
   const [panOffset, setPanOffSet] = useState(point(0, 0));

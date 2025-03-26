@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Element } from "@/types/types";
-import {
-  loadElementsFromStorage,
-  saveElementsIntoStorage,
-} from "@/Geometry/storage";
+import { loadElementsFromStorage, saveElementsIntoStorage } from "@/storage";
+import { useSearchParams } from "next/navigation";
 
 export type HistoryState = Element[];
 export type SetHistoryState = (
@@ -16,6 +14,8 @@ export const useHistory = (initialState: HistoryState = []) => {
   const [history, setHistory] = useState<HistoryState[]>([initialState]);
   const [loadingSavedElements, setLoadingSavedElements] =
     useState<boolean>(true);
+
+  const searchParams = useSearchParams();
 
   const setState: SetHistoryState = (action, overWrite = false) => {
     setHistory((prevHistory) => {
@@ -88,14 +88,16 @@ export const useHistory = (initialState: HistoryState = []) => {
   }, [handleKeyActions]);
 
   useEffect(() => {
+    console.log("Loading FRom Local Storage");
+
     const savedElements = loadElementsFromStorage();
-    if (!savedElements) {
-      setLoadingSavedElements(false);
+
+    if (!savedElements || searchParams.get("id")) {
       return;
     }
 
     setState(savedElements);
-    setLoadingSavedElements(false);
+    console.log("Loaded From Local Storage", savedElements);
   }, []);
 
   return {
@@ -104,5 +106,6 @@ export const useHistory = (initialState: HistoryState = []) => {
     undo,
     redo,
     loadingSavedElements,
+    setLoadingSavedElements,
   };
 };
