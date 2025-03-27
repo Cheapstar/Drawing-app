@@ -5,7 +5,7 @@ import { Action, LineElement, Point, SelectedPosition } from "@/types/types";
 export function handleLineSelection(
   client: Point,
   selectedElement: LineElement,
-  setSelectedElement: (ele: LineElement) => void,
+  setSelectedElement: (ele: LineElement | null) => void,
   setAction: (act: Action) => void,
   scale: number
 ) {
@@ -20,7 +20,7 @@ export function handleLineSelection(
 
     setAction("resizing");
     return true;
-  } else if (checkOnline(client, selectedElement)) {
+  } else if (checkOnline(client, selectedElement, scale)) {
     const offset = getTheOffsets(selectedElement, client);
 
     setSelectedElement({
@@ -32,6 +32,7 @@ export function handleLineSelection(
     setAction("moving");
     return true;
   } else {
+    setSelectedElement(null);
     return false;
   }
 }

@@ -50,7 +50,7 @@ export const checkOnElements = (
     case "line":
       return checkOnline(client, element as LineElement, scale as number);
     case "freehand":
-      return checkOnFreehand(client, element) as boolean;
+      return checkOnFreehand(client, element, scale as number) as boolean;
     case "text":
       return checkOnText(
         client,

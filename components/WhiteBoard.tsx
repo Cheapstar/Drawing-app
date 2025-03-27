@@ -139,11 +139,11 @@ export function WhiteBoard() {
           const { text } = updatingElement as TextElement;
 
           const lines = text?.split("\n") as string[];
-          console.log("Text is", updatingElement);
+          console.log("Text is", lines);
 
           for (const line of lines) {
             const lineContainer = document.createElement("div");
-            lineContainer.innerText = line;
+            lineContainer.innerText = line || "\u00A0";
             updatingElementRef.current.appendChild(lineContainer);
           }
 

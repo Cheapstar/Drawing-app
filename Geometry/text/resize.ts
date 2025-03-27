@@ -7,8 +7,6 @@ export function handleTextResize(
 ) {
   if (!selectedElement) return;
 
-  console.log("resizing text", selectedElement);
-
   const { x1, y1, height, width, selectedPosition, fontSize } = selectedElement;
 
   let newX1 = x1,
@@ -17,72 +15,86 @@ export function handleTextResize(
     newY2 = y1 + height,
     newFontSize = fontSize;
 
-  // Original width and height used for font scaling reference
+  // Store original dimensions for scaling reference
   const originalWidth = width;
   const originalHeight = height;
 
+  // Resize logic with improved coordinate handling
   switch (selectedPosition) {
     // Sides
     case "r":
-      newX2 = client.x;
+      newX2 = Math.max(newX1 + 1, client.x);
       break;
     case "l":
-      newX1 = client.x;
+      newX1 = Math.min(newX2 - 1, client.x);
       break;
     case "t":
-      newY1 = client.y;
+      newY1 = Math.min(newY2 - 1, client.y);
       break;
     case "b":
-      newY2 = client.y;
+      newY2 = Math.max(newY1 + 1, client.y);
       break;
 
     // Corners
     case "tl":
-      newX1 = client.x;
-      newY1 = client.y;
+      newX1 = Math.min(newX2 - 1, client.x);
+      newY1 = Math.min(newY2 - 1, client.y);
       break;
     case "tr":
-      newX2 = client.x;
-      newY1 = client.y;
+      newX2 = Math.max(newX1 + 1, client.x);
+      newY1 = Math.min(newY2 - 1, client.y);
       break;
     case "bl":
-      newX1 = client.x;
-      newY2 = client.y;
+      newX1 = Math.min(newX2 - 1, client.x);
+      newY2 = Math.max(newY1 + 1, client.y);
       break;
     case "br":
-      newX2 = client.x;
-      newY2 = client.y;
+      newX2 = Math.max(newX1 + 1, client.x);
+      newY2 = Math.max(newY1 + 1, client.y);
       break;
   }
 
   // Calculate new dimensions
-  const newWidth = Math.max(1, newX2 - newX1);
-  const newHeight = Math.max(1, newY2 - newY1);
+  const newWidth = Math.max(10, newX2 - newX1);
+  const newHeight = Math.max(10, newY2 - newY1);
 
-  // Apply font scaling for corner, top and bottom resize cases
-  if (["tl", "tr", "bl", "br", "t", "b"].includes(selectedPosition as string)) {
-    let scaleFactor;
+  // Advanced font scaling logic
+  const scalingPositions = ["tl", "tr", "bl", "br", "t", "b"];
+  if (scalingPositions.includes(selectedPosition as string)) {
+    // Calculate scale factors
+    const widthScaleFactor = newWidth / originalWidth;
+    const heightScaleFactor = newHeight / originalHeight;
 
-    // For corners, use primarily width changes
-    if (["tl", "tr", "bl", "br"].includes(selectedPosition as string)) {
-      scaleFactor = newWidth / originalWidth;
-    }
-    // For top and bottom edges, use a dampened height scaling to prevent jumps
-    else if (["t", "b"].includes(selectedPosition as string)) {
-      // Use a more conservative scaling factor for height to prevent jumping
-      const heightChange = newHeight / originalHeight;
-      // Dampen the scaling to make it more gradual
-      scaleFactor = 1 + (heightChange - 1) * 0.5;
-    }
+    // Smooth scaling algorithm
+    const smoothScaleFactor = (() => {
+      switch (selectedPosition) {
+        case "tl":
+        case "tr":
+        case "bl":
+        case "br":
+          // For corners, use a blend of width and height
+          return (widthScaleFactor + heightScaleFactor) / 2;
+        case "t":
+        case "b":
+          // For top/bottom, prioritize height with less intensity
+          return 1 + (heightScaleFactor - 1) * 0.7;
+        default:
+          return 1;
+      }
+    })();
 
-    // Apply scaling with minimum size protection
+    // Calculate new font size with smooth scaling
     newFontSize = Math.max(
       8, // Minimum font size
-      Math.round((fontSize as number) * (scaleFactor as number))
+      Math.max(
+        8, // Absolute minimum
+        Math.round((fontSize as number) * smoothScaleFactor)
+      )
     );
   }
 
-  setSelectedElement({
+  // Prepare updated element
+  const updatedElement = {
     ...selectedElement,
     x1: newX1,
     y1: newY1,
@@ -91,5 +103,7 @@ export function handleTextResize(
     width: newWidth,
     height: newHeight,
     fontSize: newFontSize,
-  });
+  };
+
+  setSelectedElement(updatedElement);
 }

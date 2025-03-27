@@ -10,30 +10,41 @@ export const checkOnRectangle = (
 ) => {
   const { x1, x2, y1, y2, strokeWidth } = element;
 
-  if (!(client.x >= x1 && client.x <= x2 && client.y >= y1 && client.y <= y2))
+  // Ensure a minimum threshold to avoid being too small when zoomed out
+  const threshold = Math.max((strokeWidth as number) / scale, 2);
+
+  // Expand the bounding box by the threshold for outer clicks
+  const expandedX1 = x1 - threshold;
+  const expandedX2 = x2 + threshold;
+  const expandedY1 = y1 - threshold;
+  const expandedY2 = y2 + threshold;
+
+  // If outside the expanded bounding box, return false
+  if (
+    client.x < expandedX1 ||
+    client.x > expandedX2 ||
+    client.y < expandedY1 ||
+    client.y > expandedY2
+  )
     return false;
 
-  const threshold = (strokeWidth as number) / scale;
-
+  // Check if the click is near any edge (inner or outer side)
   const top =
-    client.x >= x1 - threshold &&
-    client.x <= x2 + threshold &&
-    Math.abs(y1 - client.y) <= threshold;
-
+    Math.abs(client.y - y1) <= threshold &&
+    client.x >= expandedX1 &&
+    client.x <= expandedX2;
   const bottom =
-    client.x >= x1 - threshold &&
-    client.x <= x2 + threshold &&
-    Math.abs(y2 - client.y) <= threshold;
-
+    Math.abs(client.y - y2) <= threshold &&
+    client.x >= expandedX1 &&
+    client.x <= expandedX2;
   const left =
-    client.y >= y1 - threshold &&
-    client.y <= y2 + threshold &&
-    Math.abs(x1 - client.x) <= threshold;
-
+    Math.abs(client.x - x1) <= threshold &&
+    client.y >= expandedY1 &&
+    client.y <= expandedY2;
   const right =
-    client.y >= y1 - threshold &&
-    client.y <= y2 + threshold &&
-    Math.abs(x2 - client.x) <= threshold;
+    Math.abs(client.x - x2) <= threshold &&
+    client.y >= expandedY1 &&
+    client.y <= expandedY2;
 
-  return top || left || right || bottom;
+  return top || bottom || left || right;
 };

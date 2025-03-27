@@ -7,9 +7,9 @@ import { BoundingElement, LineElement, Point } from "@/types/types";
 export function checkOnline(
   client: Point,
   element: LineElement,
-  scale?: number
+  scale: number
 ) {
-  const halfStroke = (element.strokeWidth as number) / 8;
+  const halfStroke = (element.strokeWidth as number) / (8 * scale);
 
   for (let t = 0; t <= 1; t += 0.01) {
     // Iterate over `t` values
