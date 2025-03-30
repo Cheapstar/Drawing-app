@@ -4,8 +4,6 @@ import { FreehandElement } from "@/types/types";
 import getStroke from "perfect-freehand";
 
 export const createFreeHand = (element: FreehandElement) => {
-  console.log("In FreeHand", element.stroke);
-
   const path = new Path2D();
   const outline = getStroke(element.stroke, {
     ...DEFAULT_STROKE_OPTIONS,

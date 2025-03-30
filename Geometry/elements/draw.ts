@@ -1,11 +1,12 @@
 import { RoughCanvas } from "roughjs/bin/canvas";
-import { BoundingElement, Element, LineElement } from "@/types/types";
+import { BoundingElement, Element, LineElement, Point } from "@/types/types";
 import { createFreeHand } from "@/Geometry/freehand/draw";
 import { createLine } from "@/Geometry/line/draw";
 import { createRectangle } from "@/Geometry/rectangle/draw";
 import { quadraticBezierMidpoint } from "@/Geometry/utils";
 import { getTheBoundingElement } from "./boundingElement";
 import { drawText } from "../text/draw";
+import { Participant } from "@/components/hooks/useCollab";
 
 export const drawElement = (
   roughCanvas: RoughCanvas,
@@ -164,4 +165,81 @@ export function drawCurveBoundingBox(
   drawHandle(ctx, x2 + padding, y1 - padding, scale); // Top-right
   drawHandle(ctx, x1 - padding, y2 + padding, scale); // Bottom
   drawHandle(ctx, x2 + padding, y2 + padding, scale); // Bottom
+}
+
+export function drawCursor(
+  participant: Participant,
+  ctx: CanvasRenderingContext2D,
+  scale: number
+) {
+  ctx.save();
+
+  // Draw cursor pointer (triangle shape)
+  drawCursorPointer(ctx, participant, scale);
+
+  // Draw username label
+  drawUsernameLabel(ctx, participant, scale);
+
+  ctx.restore();
+}
+
+/**
+ * Draws the triangular cursor pointer
+ */
+function drawCursorPointer(
+  ctx: CanvasRenderingContext2D,
+  participant: Participant,
+  scale: number
+) {
+  ctx.beginPath();
+  ctx.moveTo(participant.position.x, participant.position.y); // Tip of cursor
+  ctx.lineTo(
+    participant.position.x + 15 / scale,
+    participant.position.y + 15 / scale
+  );
+  ctx.lineTo(
+    participant.position.x + 5 / scale,
+    participant.position.y + 15 / scale
+  );
+  ctx.lineTo(participant.position.x, participant.position.y + 20 / scale);
+  ctx.fillStyle = participant.userDetails.color;
+  ctx.fill();
+  ctx.closePath();
+}
+
+/**
+ * Draws the rounded rectangle with username text
+ */
+function drawUsernameLabel(
+  ctx: CanvasRenderingContext2D,
+  participant: Participant,
+  scale: number
+) {
+  // Configure font
+  const fontSize = 16 / scale;
+  ctx.font = `${fontSize}px sans-serif`;
+  const textWidth = ctx.measureText(participant.userDetails.userName).width;
+
+  // Draw rounded rectangle background
+  const rectX = participant.position.x - 10 / scale;
+  const rectY = participant.position.y + (20 + 10) / scale;
+  const rectWidth = textWidth + 20 / scale;
+  const rectHeight = fontSize + 15 / scale;
+  const cornerRadius = 8 / scale;
+
+  ctx.beginPath();
+  ctx.roundRect(rectX, rectY, rectWidth, rectHeight, [cornerRadius]);
+  ctx.fillStyle = participant.userDetails.color;
+  ctx.fill();
+  ctx.closePath();
+
+  // Draw username text
+  ctx.beginPath();
+  ctx.fillStyle = "white";
+  ctx.fillText(
+    participant.userDetails.userName,
+    participant.position.x + 2 / scale,
+    participant.position.y + (20 + 30) / scale
+  );
+  ctx.closePath();
 }

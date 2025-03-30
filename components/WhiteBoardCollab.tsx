@@ -1,7 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import rough from "roughjs";
 import { ToolBar } from "./ToolBar";
 import { UndoRedo } from "./UndoRedo";
@@ -31,7 +37,7 @@ import {
 import { HistoryState, useHistory } from "./hooks/history";
 import { point } from "@/Geometry/utils";
 import { adjustElementCoordinates } from "@/Geometry/utils";
-import { drawElement } from "@/Geometry/elements/draw";
+import { drawCursor, drawElement } from "@/Geometry/elements/draw";
 
 import { handleElementSelection } from "@/Geometry/elements/selection";
 import { drawBoundingBox } from "@/Geometry/elements/draw";
@@ -55,9 +61,10 @@ import { ImSpinner, ImSpinner2 } from "react-icons/im";
 import { SideMenu } from "./SideMenu";
 import { checkOnText } from "@/Geometry/text/position";
 import { ShareButton } from "./ShareButton";
-import { ShareModal } from "./ShareModal";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
+import { SessionModal } from "./SessionModal";
+import { useCollab } from "./hooks/useCollab";
 
 type CursorAction =
   | "vertical"
@@ -67,7 +74,7 @@ type CursorAction =
   | "inside"
   | "none";
 
-export function WhiteBoard() {
+export function CollaborativeWhiteboard() {
   const {
     elements,
     setElements,
@@ -102,12 +109,26 @@ export function WhiteBoard() {
   const { scale, setScale, scaleOffset, setScaleOffset, onZoom } = useZoom();
   const [drawingElement, setDrawingElement] = useState<Element | null>(null);
 
-  const [updatingElement, setUpdatingElement] = useState<Element | null>();
+  const [updatingElement, setUpdatingElement] = useState<Element | null>(null);
   const [updating, setUpdating] = useState<boolean>(false);
 
   const [shareModal, setShareModal] = useAtom(showShareModalAtom);
 
   const searchParams = useSearchParams();
+
+  const { participants, remoteElements } = useCollab({
+    drawingElement,
+    selectedElement,
+    updatingElement,
+    action,
+    panOffset,
+    scale,
+    scaleOffset,
+    boardRef,
+    setScale,
+    setPanOffset,
+    setElements,
+  });
 
   // Focus textarea when writing text
   useEffect(() => {
@@ -164,8 +185,8 @@ export function WhiteBoard() {
 
     boardRef.current.width = width * dpr;
     boardRef.current.height = height * dpr;
-    boardRef.current.style.width = `${width}px`;
-    boardRef.current.style.height = `${height}px`;
+    boardRef.current.style.width = width + "px";
+    boardRef.current.style.height = height + "px";
   }, []);
 
   // Set up event listeners
@@ -175,6 +196,7 @@ export function WhiteBoard() {
     return () => window.removeEventListener("resize", resizeCanvas);
   }, [resizeCanvas]);
 
+  // Add a separate effect to update scaleOffset only when scale or canvas size changes
   useEffect(() => {
     const canvas = boardRef.current;
     if (!canvas) return;
@@ -189,7 +211,8 @@ export function WhiteBoard() {
     setScaleOffset({ x: scaleOffsetX, y: scaleOffsetY });
   }, [scale, boardRef.current?.width, boardRef.current?.height]);
 
-  const renderElements = useCallback(() => {
+  // Draw the canvas
+  useLayoutEffect(() => {
     const canvas = boardRef.current;
     if (!canvas) return;
 
@@ -209,6 +232,7 @@ export function WhiteBoard() {
     const scaleOffsetX = (scaledWidth - canvas.width / dpr) / 2;
     const scaleOffsetY = (scaledHeight - canvas.height / dpr) / 2;
 
+    // Use the calculated values directly instead of from state
     ctx.save();
 
     // Scale for high DPR displays first
@@ -224,7 +248,7 @@ export function WhiteBoard() {
       drawElement(rc, ctx, drawingElement);
     }
 
-    console.log("Drawing the Elements", elements);
+    console.log("Drawing The ELements", elements);
     // Draw all elements
     elements.forEach((element: Element) => {
       if (selectedElement && element.id === selectedElement.id) {
@@ -236,6 +260,11 @@ export function WhiteBoard() {
       drawElement(rc, ctx, element);
     });
 
+    if (participants && participants.length > 0) {
+      for (const participant of participants) {
+        drawCursor(participant, ctx, scale);
+      }
+    }
     // Draw selection indicator
     if (selectedElement) {
       ctx.save();
@@ -252,25 +281,9 @@ export function WhiteBoard() {
     scale,
     action,
     drawingElement,
-    resizeCanvas,
     updatingElement,
-    boardRef.current?.height,
-    boardRef.current?.width,
-  ]);
-
-  // Draw the canvas
-  useEffect(() => {
-    renderElements();
-  }, [
-    elements,
-    selectedElement,
-    scaleOffset,
-    panOffset,
-    scale,
-    action,
-    drawingElement,
-    resizeCanvas,
-    updatingElement,
+    participants,
+    remoteElements,
   ]);
 
   // Utility function to get mouse coordinates adjusted for pan and scale
@@ -822,7 +835,7 @@ export function WhiteBoard() {
     >
       {/*Side Menu */}
       <div
-        className=""
+        className="fixed flex top-3 left-3 items-center gap-2"
         style={{
           cursor:
             action === "resizing" || action === "drawing" || action === "moving"
@@ -875,12 +888,8 @@ export function WhiteBoard() {
       {/*Share Modal*/}
       {shareModal && (
         <div className="fixed w-full h-full z-[1000] flex justify-center items-center">
-          <div className="z-10 w-[600px] bg-white rounded-md p-16">
-            <ShareModal
-              elements={elements as Element[]}
-              panOffset={panOffset}
-              scale={scale}
-            ></ShareModal>
+          <div className="z-10 w-[600px]  bg-white rounded-md p-4">
+            <SessionModal></SessionModal>
           </div>
           <div
             className="fixed w-full h-full bg-black opacity-15 "

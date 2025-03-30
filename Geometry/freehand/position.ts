@@ -8,7 +8,7 @@ export const checkOnFreehand = (
 ) => {
   if (!element.stroke || element.stroke.length < 1) return null;
 
-  const strokeTolerance = Math.max((element.strokeWidth as number) / scale, 2); // Ensure a minimum tolerance
+  const strokeTolerance = Math.max((element.strokeWidth as number) / scale, 2);
   if (element.stroke.length === 1)
     return nearPoint(
       element.stroke[0][0],
@@ -30,7 +30,6 @@ export const checkOnFreehand = (
   return null;
 };
 
-// Helper function to check if a point is near a line segment
 function pointNearSegment(
   px: number,
   py: number,

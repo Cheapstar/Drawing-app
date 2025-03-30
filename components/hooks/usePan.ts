@@ -3,7 +3,7 @@ import { point } from "@/Geometry/utils";
 import { loadPanOffsetFromStorage, savePanOffsetIntoStorage } from "@/storage";
 
 export function usePan() {
-  const [panOffset, setPanOffSet] = useState(point(0, 0));
+  const [panOffset, setPanOffset] = useState(point(0, 0));
   const [startPanMousePosition, setStartPanMousePosition] = useState(
     point(0, 0)
   );
@@ -11,7 +11,7 @@ export function usePan() {
   // Handle wheel events for panning
   useEffect(() => {
     const panFunction = (event: WheelEvent) => {
-      setPanOffSet((prevState) => ({
+      setPanOffset((prevState) => ({
         x: prevState.x - event.deltaX,
         y: prevState.y - event.deltaY,
       }));
@@ -27,7 +27,7 @@ export function usePan() {
     const savdPanOffset = loadPanOffsetFromStorage();
     if (!savdPanOffset) return;
 
-    setPanOffSet(savdPanOffset);
+    setPanOffset(savdPanOffset);
   }, []);
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export function usePan() {
 
   return {
     panOffset,
-    setPanOffSet,
+    setPanOffset,
     startPanMousePosition,
     setStartPanMousePosition,
   };
