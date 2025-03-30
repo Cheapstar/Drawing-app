@@ -95,6 +95,8 @@ export function useCollab({
   const roomId = searchParams.get("join");
   const [participants, setParticpants] = useState<Participant[]>([]);
   const [remoteElements, setRemoteElements] = useState<Element[]>([]);
+  const [movingElements, setMovingElements] = useState<Element[]>([]);
+  const [resizeElement, setResizeElement] = useState<Element[]>([]);
 
   useEffect(() => {
     const connectWebSocket = async () => {
@@ -134,21 +136,37 @@ export function useCollab({
     };
   }, []);
 
+  // Send The New Element Details That is being Drawn
   useEffect(() => {
     if (drawingElement && socket && socket.exists()) {
       socket.send("drawing-element", { element: drawingElement, roomId });
     }
   }, [drawingElement, socket]);
 
-  /*
-    Let's render the mouse first
-  */
+  // Send the Moved Element Details
+  useEffect(() => {
+    if (action === "moving" && selectedElement && socket && socket.exists()) {
+      socket.send("element-moves", {
+        element: selectedElement,
+        roomId,
+      });
+    }
+
+    if (action === "resizing" && selectedElement && socket && socket.exists()) {
+      socket.send("element-resize", {
+        element: selectedElement,
+        roomId,
+      });
+    }
+  }, [selectedElement]);
+
   const getMouseCoordinates = (mouse: Point): Point => {
     const x = (mouse.x - panOffset.x * scale + scaleOffset.x) / scale;
     const y = (mouse.y - panOffset.y * scale + scaleOffset.y) / scale;
     return { x, y };
   };
 
+  //
   useEffect(() => {
     if (socket && socket.exists()) {
       const position = getMouseCoordinates(mouse);
@@ -156,6 +174,11 @@ export function useCollab({
     }
   }, [mouse, panOffset, scale, scaleOffset, socket]);
 
+  /*
+    Let's render the mouse first
+  */
+
+  // Socket , Setting Up The  Socket Events
   useEffect(() => {
     if (socket) {
       socket.on("participant-position", (payload: Participant) => {
@@ -203,6 +226,40 @@ export function useCollab({
         }); // Pass true as the second parameter to indicate this is an overwrite
       });
 
+      socket.on("move-element", (payload) => {
+        setMovingElements((elements) => {
+          const { element } = payload;
+          const index = elements.findIndex((ele) => ele.id === element.id);
+
+          const updatedElements = [...elements.map((el) => ({ ...el }))];
+
+          if (index === -1) {
+            updatedElements.push({ ...element });
+          } else {
+            updatedElements[index] = { ...element };
+          }
+
+          return updatedElements;
+        });
+      });
+
+      socket.on("resize-element", (payload) => {
+        setResizeElement((elements) => {
+          const { element } = payload;
+          const index = elements.findIndex((ele) => ele.id === element.id);
+
+          const updatedElements = [...elements.map((el) => ({ ...el }))];
+
+          if (index === -1) {
+            updatedElements.push({ ...element });
+          } else {
+            updatedElements[index] = { ...element };
+          }
+
+          return updatedElements;
+        });
+      });
+
       socket.on("remove-participant", (payload) => {
         setParticpants((curr) => {
           const index = curr.findIndex((p) => p.userId === payload.userId);
@@ -220,18 +277,7 @@ export function useCollab({
     }
   }, [socket]);
 
-  useEffect(() => {
-    if (socket) {
-      socket.on("room-joined", (payload: BoardStateType) => {
-        console.log("Setting the Params");
-
-        setScale(payload.scale);
-        setPanOffset(payload.panOffset);
-        setElements(payload.elements);
-      });
-    }
-  }, [socket]);
-
+  // Update the Main Elements Array With Recieved Elements
   useEffect(() => {
     if (!remoteElements || remoteElements.length <= 0) return;
     setElements((prevState) => {
@@ -251,15 +297,15 @@ export function useCollab({
 
           newElement = {
             ...newElement,
-            x1: newX1,
-            y1: newY1,
+            x1: newX1 as number,
+            y1: newY1 as number,
             x2: newX2,
             y2: newY2,
             controlPoint: {
               x: ((newX1 as number) + (newX2 as number)) / 2,
               y: ((newY1 as number) + (newY2 as number)) / 2,
             },
-          };
+          } as Element;
         } else if (remoteElement.type === "rectangle") {
           const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
             remoteElement as RectangleElement
@@ -273,7 +319,7 @@ export function useCollab({
               x2: newX2,
               y2: newY2,
             },
-          };
+          } as Element;
         } else if (remoteElement.type === "freehand") {
           const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
             remoteElement as FreehandElement
@@ -287,7 +333,7 @@ export function useCollab({
               x2: newX2,
               y2: newY2,
             },
-          };
+          } as Element;
         } else if (remoteElement.type === "text") {
           const ctx = boardRef.current?.getContext("2d");
           if (!ctx) return;
@@ -322,6 +368,77 @@ export function useCollab({
     setRemoteElements([]);
   }, [remoteElements]);
 
+  // Update the Moved Elements Details
+  useEffect(() => {
+    if (!movingElements || movingElements.length <= 0) return;
+    setElements((prevState) => {
+      // First, create a copy of the previous state
+      const newState = [...prevState.map((ele) => ({ ...ele }))];
+
+      // For each remote element, either update existing or add new
+      movingElements.forEach((movedElement) => {
+        const index = newState.findIndex((ele) => ele.id === movedElement.id);
+
+        const newElement = { ...movedElement };
+
+        if (index === -1) {
+          // Me Being lazy
+          newState.push({ ...newElement });
+        } else {
+          // This is an existing element, update it
+          newState[index] = { ...newElement };
+        }
+      });
+
+      return newState;
+    });
+
+    // Clear the remoteElements after they've been processed
+    // This is important to prevent reprocessing the same elements
+    setMovingElements([]);
+  }, [movingElements]);
+
+  useEffect(() => {
+    if (!resizeElement || resizeElement.length <= 0) return;
+    setElements((prevState) => {
+      // First, create a copy of the previous state
+      const newState = [...prevState.map((ele) => ({ ...ele }))];
+
+      // For each remote element, either update existing or add new
+      resizeElement.forEach((resizedElement) => {
+        const index = newState.findIndex((ele) => ele.id === resizedElement.id);
+
+        const newElement = { ...resizedElement };
+
+        if (index === -1) {
+          // Me Being lazy
+          newState.push({ ...newElement });
+        } else {
+          // This is an existing element, update it
+          newState[index] = { ...newElement };
+        }
+      });
+
+      return newState;
+    });
+
+    // Clear the remoteElements after they've been processed
+    // This is important to prevent reprocessing the same elements
+    setResizeElement([]);
+  }, [resizeElement]);
+
+  // Load The Initial Data Recieved From The Server
+  useEffect(() => {
+    if (socket) {
+      socket.on("room-joined", (payload: BoardStateType) => {
+        console.log("Setting the Params");
+
+        setScale(payload.scale);
+        setPanOffset(payload.panOffset);
+        setElements(payload.elements);
+      });
+    }
+  }, [socket]);
   return {
     participants,
     remoteElements,
