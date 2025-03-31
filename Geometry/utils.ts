@@ -338,6 +338,101 @@ export const adjustElementCoordinates = (element: Element) => {
   return element;
 };
 
+export function convertElements(
+  elements: Element[],
+  boardRef: React.RefObject<HTMLCanvasElement>
+) {
+  return elements.map((ele) => convertElement(ele, boardRef));
+}
+
+export function convertElement(
+  element: Element,
+  boardRef: React.RefObject<HTMLCanvasElement>
+) {
+  const { type } = element;
+  if (type === "line") {
+    const { x1, y1, x2, y2, type } = element as LineElement;
+    const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
+      element as Element
+    );
+
+    return {
+      ...element,
+      ...{
+        x1: newX1,
+        y1: newY1,
+        x2: newX2,
+        y2: newY2,
+        controlPoint: {
+          x: ((newX1 as number) + (newX2 as number)) / 2,
+          y: ((newY1 as number) + (newY2 as number)) / 2,
+        },
+      },
+    };
+  } else if (type === "rectangle") {
+    const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
+      element as RectangleElement
+    );
+
+    return {
+      ...element,
+      ...{
+        x1: newX1,
+        y1: newY1,
+        x2: newX2,
+        y2: newY2,
+      },
+    };
+  } else if (type === "freehand") {
+    const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
+      element as FreehandElement
+    );
+
+    return {
+      ...element,
+      ...{
+        x1: newX1,
+        y1: newY1,
+        x2: newX2,
+        y2: newY2,
+      },
+    };
+  } else {
+    const { x1, y1, text, fontSize, fontFamily } = element;
+    const ctx = boardRef.current.getContext("2d");
+    if (!ctx) return false;
+
+    console.log("Text is", text);
+
+    ctx.save();
+    ctx.font = `${fontSize}px ${fontFamily}`;
+
+    const lines = text?.split("\n") as string[];
+
+    // Find the longest line for width calculation
+    const longestLine = lines.reduce((a, b) =>
+      ctx.measureText(a).width > ctx.measureText(b).width ? a : b
+    );
+
+    const textWidth = ctx.measureText(longestLine).width;
+    const textHeight = (fontSize as number) * lines.length * 1.5; // Approximate line height
+
+    const x2 = x1 + textWidth;
+    const y2 = y1 + textHeight;
+
+    ctx.restore();
+    return {
+      ...element,
+      x1,
+      x2,
+      y1,
+      y2,
+      width: textWidth,
+      height: textHeight,
+    };
+  }
+}
+
 /*
   We Can Run This Function At Regular Interval
 */

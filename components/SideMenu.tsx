@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { SetHistoryState } from "./hooks/history";
 
@@ -8,6 +8,18 @@ interface props {
 
 export function SideMenu({ setElements }: props) {
   const [showSideMenu, setShowSideMenu] = useState<boolean>(false);
+
+  useEffect(() => {
+    function turnOffSideMenu() {
+      setShowSideMenu(false);
+    }
+
+    window.addEventListener("click", turnOffSideMenu);
+
+    return () => {
+      window.removeEventListener("click", turnOffSideMenu);
+    };
+  }, []);
 
   return (
     <div

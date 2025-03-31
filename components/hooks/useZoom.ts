@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { Dispatch, useCallback, useEffect, useState } from "react";
 import { point } from "@/Geometry/utils";
 import { loadScaleFromStorage, saveScaleIntoStorage } from "@/storage";
+import { Point } from "@/types/types";
+import { SetStateAction } from "jotai";
 
-export function useZoom() {
+interface props {
+  panOffset: Point;
+  setPanOffset: Dispatch<SetStateAction<Point>>;
+}
+
+export function useZoom({ panOffset, setPanOffset }: props) {
   const [scale, setScale] = useState(1);
   const [scaleOffset, setScaleOffset] = useState(point(0, 0));
 

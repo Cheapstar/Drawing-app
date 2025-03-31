@@ -2,9 +2,11 @@
 export class WebSocketClient {
   private socket: WebSocket;
   private handlers: Map<string, handlerFn[]> = new Map();
+  private roomId: string;
 
-  constructor(url: string) {
+  constructor(url: string, roomId: string) {
     this.socket = new WebSocket(url);
+    this.roomId = roomId;
     this.connect();
   }
 
@@ -72,8 +74,7 @@ export class WebSocketClient {
   }
 
   exists = () => {
-    if (this.socket.OPEN) return true;
-    return false;
+    return this.socket.readyState === WebSocket.OPEN;
   };
 }
 

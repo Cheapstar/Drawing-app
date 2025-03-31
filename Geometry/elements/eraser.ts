@@ -84,26 +84,9 @@ export function handleEraserMove(
   }
 }
 
-export function finalizeErasing(
-  elements: Element[],
-  eraseElements: Element[],
-  setSelectedElement: (ele: Element | null) => void,
-  setEraseElements: (arr: Element[]) => void,
-  setAction: (ele: Action) => void,
-  setElements: (ele: Element[]) => void
-) {
-  if (eraseElements.length === 0) {
-    setAction("none");
-    return;
-  }
-
-  const newElements = elements.filter(
+export function finalizeErasing(elements: Element[], eraseElements: Element[]) {
+  return elements.filter(
     (element) =>
       !eraseElements.some((eraseElement) => eraseElement.id === element.id)
   );
-
-  setElements(newElements);
-  setEraseElements([]);
-  setSelectedElement(null);
-  setAction("none");
 }

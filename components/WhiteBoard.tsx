@@ -29,7 +29,7 @@ import {
   TextElement,
 } from "@/types/types";
 import { HistoryState, useHistory } from "./hooks/history";
-import { point } from "@/Geometry/utils";
+import { convertElement, point } from "@/Geometry/utils";
 import { adjustElementCoordinates } from "@/Geometry/utils";
 import { drawElement } from "@/Geometry/elements/draw";
 
@@ -99,7 +99,10 @@ export function WhiteBoard() {
   const textElementRef = useRef<HTMLDivElement>(null);
   const updatingElementRef = useRef<HTMLDivElement>(null);
 
-  const { scale, setScale, scaleOffset, setScaleOffset, onZoom } = useZoom();
+  const { scale, setScale, scaleOffset, setScaleOffset, onZoom } = useZoom({
+    panOffset,
+    setPanOffset,
+  });
   const [drawingElement, setDrawingElement] = useState<Element | null>(null);
 
   const [updatingElement, setUpdatingElement] = useState<Element | null>();
@@ -224,7 +227,6 @@ export function WhiteBoard() {
       drawElement(rc, ctx, drawingElement);
     }
 
-    console.log("Drawing the Elements", elements);
     // Draw all elements
     elements.forEach((element: Element) => {
       if (selectedElement && element.id === selectedElement.id) {
@@ -550,14 +552,16 @@ export function WhiteBoard() {
   const handlePointerUp = () => {
     // Handle erasing
     if (action === "erasing") {
-      finalizeErasing(
-        elements,
-        eraseElements,
-        setSelectedElement,
-        setEraseElements,
-        setAction,
-        setElements
-      );
+      if (eraseElements.length === 0) {
+        setAction("none");
+        return;
+      }
+      const newElements = finalizeErasing(elements, eraseElements);
+
+      setElements(newElements);
+      setEraseElements([]);
+      setSelectedElement(null);
+      setAction("none");
       return;
     }
 
@@ -568,71 +572,17 @@ export function WhiteBoard() {
 
     // Finalize drawing
     if (action === "drawing") {
-      if (tool === "line") {
-        const { x1, y1, x2, y2, type } = drawingElement as LineElement;
-        const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
-          drawingElement as Element
-        );
-
-        setElements([
-          ...elements,
-          {
-            ...drawingElement,
-            ...{
-              x1: newX1,
-              y1: newY1,
-              x2: newX2,
-              y2: newY2,
-              controlPoint: {
-                x: ((newX1 as number) + (newX2 as number)) / 2,
-                y: ((newY1 as number) + (newY2 as number)) / 2,
-              },
-            },
-          },
-        ] as HistoryState);
-        setAction("none");
-        setDrawingElement(null);
-        return;
-      } else if (tool === "rectangle") {
-        const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
-          drawingElement as RectangleElement
-        );
-
-        setElements([
-          ...elements,
-          {
-            ...drawingElement,
-            ...{
-              x1: newX1,
-              y1: newY1,
-              x2: newX2,
-              y2: newY2,
-            },
-          },
-        ] as HistoryState);
-        setAction("none");
-        setDrawingElement(null);
-        return;
-      } else if (tool === "freehand") {
-        const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
-          drawingElement as FreehandElement
-        );
-
-        setElements([
-          ...elements,
-          {
-            ...drawingElement,
-            ...{
-              x1: newX1,
-              y1: newY1,
-              x2: newX2,
-              y2: newY2,
-            },
-          },
-        ] as HistoryState);
-        setAction("none");
-        setDrawingElement(null);
-      }
+      const convertedElement = convertElement(
+        drawingElement as Element,
+        boardRef as React.RefObject<HTMLCanvasElement>
+      );
+      setElements([
+        ...elements,
+        {
+          ...convertedElement,
+        },
+      ] as HistoryState);
+      setDrawingElement(null);
       setAction("none");
       return;
     }
@@ -663,23 +613,12 @@ export function WhiteBoard() {
       return;
 
     if (drawingElement.text != "" && drawingElement.text != "\n") {
-      const ctx = boardRef.current?.getContext("2d");
-      if (!ctx) return;
+      const updatedElement = convertElement(
+        drawingElement as Element,
+        boardRef as React.RefObject<HTMLCanvasElement>
+      );
 
-      ctx.save();
-      ctx.font = `${fontSize}px ${fontFamily}`;
-
-      const text = drawingElement.text || "";
-
-      const updatedElement: TextElement = {
-        ...drawingElement,
-        text,
-        ...getTextElementDetails(drawingElement, ctx),
-      };
-
-      setElements([...elements, updatedElement]);
-
-      ctx.restore();
+      setElements([...elements, updatedElement] as HistoryState);
     }
 
     setDrawingElement(null);
@@ -731,19 +670,10 @@ export function WhiteBoard() {
     if (updatingElement.text === "" || updatingElement.text === "\n") {
       deleteElement(elements, updatingElement, setUpdatingElement, setElements);
     } else {
-      const ctx = boardRef.current?.getContext("2d");
-      if (!ctx) return;
-
-      ctx.save();
-      ctx.font = `${fontSize}px ${fontFamily}`;
-
-      const text = updatingElement.text || "";
-
-      const updatedElement: TextElement = {
-        ...updatingElement,
-        text,
-        ...getTextElementDetails(updatingElement, ctx),
-      };
+      const updatedElement = convertElement(
+        updatingElement as Element,
+        boardRef as React.RefObject<HTMLCanvasElement>
+      );
 
       const newElements = [...elements];
 
@@ -751,11 +681,10 @@ export function WhiteBoard() {
         return updatingElement.id === ele.id;
       });
 
-      newElements[index] = updatedElement;
+      newElements[index] = updatedElement as Element;
 
       setElements(newElements);
 
-      ctx.restore();
       setUpdatingElement(null);
     }
 
@@ -1024,11 +953,11 @@ export function WhiteBoard() {
           }}
           onInput={(event: React.FormEvent<HTMLDivElement>) => {
             if (updatingElement.type === "text") {
-              console.log("The Text is", updatingElement.text);
               const sanitizedText = event.currentTarget.innerText.replace(
                 /\n\n/g,
                 "\n"
               );
+              console.log("Sanitized is", sanitizedText);
               setUpdatingElement({
                 ...updatingElement,
                 text: sanitizedText,

@@ -20,13 +20,18 @@ import {
 } from "unique-names-generator";
 import { SetHistoryState } from "./history";
 import { useSearchParams } from "next/navigation";
-import { adjustElementCoordinates } from "@/Geometry/utils";
+import {
+  adjustElementCoordinates,
+  convertElement,
+  convertElements,
+} from "@/Geometry/utils";
 import { getTextElementDetails } from "@/Geometry/text/boundingElement";
 
 interface props {
   drawingElement: Element | null;
   selectedElement: Element | null;
   updatingElement: Element | null;
+  eraseElements: Element[];
   action: Action | null;
   panOffset: Point;
   scale: number;
@@ -78,6 +83,7 @@ export function useCollab({
   drawingElement,
   selectedElement,
   updatingElement,
+  eraseElements,
   action,
   panOffset,
   scale,
@@ -97,13 +103,16 @@ export function useCollab({
   const [remoteElements, setRemoteElements] = useState<Element[]>([]);
   const [movingElements, setMovingElements] = useState<Element[]>([]);
   const [resizeElement, setResizeElement] = useState<Element[]>([]);
+  const [remoteEraseElements, setRemoteEraseElements] = useState<Element[]>([]);
+  const [remoteUpdatedElement, setRemoteUpdateElement] = useState<Element>();
 
   useEffect(() => {
     const connectWebSocket = async () => {
       const id = crypto.randomUUID();
 
       const socketClient = new WebSocketClient(
-        `ws://localhost:8080?userId=${id}`
+        `ws://localhost:8080?userId=${id}`,
+        roomId as string
       );
 
       setSocket(socketClient);
@@ -126,13 +135,22 @@ export function useCollab({
       setMouse({ x: event.clientX, y: event.clientY });
     }
 
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      if (socket && socket.exists()) {
+        socket.send("leave-room", { roomId });
+      }
+    }
+
     window.addEventListener("mousemove", updateMouseMovement);
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
       if (socket && socket.exists()) {
+        socket.send("leave-room", { roomId });
         socket.close();
       }
       window.removeEventListener("mousemove", updateMouseMovement);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, []);
 
@@ -158,7 +176,29 @@ export function useCollab({
         roomId,
       });
     }
-  }, [selectedElement]);
+  }, [selectedElement, socket]);
+
+  // erasing Them Elements
+  useEffect(() => {
+    if (
+      eraseElements &&
+      eraseElements.length > 0 &&
+      socket &&
+      socket.exists()
+    ) {
+      socket.send("elements-erase", { elements: eraseElements, roomId });
+    }
+  }, [eraseElements, socket]);
+
+  // Send the details about element that is being updated
+  useEffect(() => {
+    if (updatingElement && socket && socket.exists()) {
+      socket.send("element-update", {
+        roomId,
+        element: updatingElement,
+      });
+    }
+  }, [updatingElement, socket]);
 
   const getMouseCoordinates = (mouse: Point): Point => {
     const x = (mouse.x - panOffset.x * scale + scaleOffset.x) / scale;
@@ -260,6 +300,16 @@ export function useCollab({
         });
       });
 
+      socket.on("erase-elements", (payload) => {
+        console.log("Erasing the Elements", payload);
+        setRemoteEraseElements(payload.elements);
+      });
+
+      socket.on("update-element", (payload) => {
+        console.log("Running Bhai");
+        setRemoteUpdateElement(payload.element);
+      });
+
       socket.on("remove-participant", (payload) => {
         setParticpants((curr) => {
           const index = curr.findIndex((p) => p.userId === payload.userId);
@@ -288,75 +338,17 @@ export function useCollab({
       remoteElements.forEach((remoteElement) => {
         const index = newState.findIndex((ele) => ele.id === remoteElement.id);
 
-        let newElement = { ...remoteElement };
-
-        if (remoteElement.type === "line") {
-          const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
-            remoteElement as Element
-          );
-
-          newElement = {
-            ...newElement,
-            x1: newX1 as number,
-            y1: newY1 as number,
-            x2: newX2,
-            y2: newY2,
-            controlPoint: {
-              x: ((newX1 as number) + (newX2 as number)) / 2,
-              y: ((newY1 as number) + (newY2 as number)) / 2,
-            },
-          } as Element;
-        } else if (remoteElement.type === "rectangle") {
-          const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
-            remoteElement as RectangleElement
-          );
-
-          newElement = {
-            ...newElement,
-            ...{
-              x1: newX1,
-              y1: newY1,
-              x2: newX2,
-              y2: newY2,
-            },
-          } as Element;
-        } else if (remoteElement.type === "freehand") {
-          const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
-            remoteElement as FreehandElement
-          );
-
-          newElement = {
-            ...remoteElement,
-            ...{
-              x1: newX1,
-              y1: newY1,
-              x2: newX2,
-              y2: newY2,
-            },
-          } as Element;
-        } else if (remoteElement.type === "text") {
-          const ctx = boardRef.current?.getContext("2d");
-          if (!ctx) return;
-
-          ctx.save();
-          ctx.font = `${remoteElement.fontSize}px ${remoteElement.fontFamily}`;
-
-          const text = remoteElement.text || "";
-
-          newElement = {
-            ...remoteElement,
-            text,
-            ...getTextElementDetails(remoteElement, ctx),
-          };
-          ctx.restore();
-        }
+        const newElement = convertElement(
+          remoteElement,
+          boardRef as React.RefObject<HTMLCanvasElement>
+        );
 
         if (index === -1) {
           // This is a new element, add it
-          newState.push({ ...newElement });
+          newState.push({ ...(newElement as Element) });
         } else {
           // This is an existing element, update it
-          newState[index] = { ...newElement };
+          newState[index] = { ...newElement } as Element;
         }
       });
 
@@ -427,6 +419,48 @@ export function useCollab({
     setResizeElement([]);
   }, [resizeElement]);
 
+  // Erase Them Elements
+  useEffect(() => {
+    if (!remoteEraseElements || remoteEraseElements.length <= 0) return;
+    console.log("Remote Erase Elements", remoteEraseElements);
+    setElements((prevState) => {
+      const newState = [...prevState.map((ele) => ({ ...ele }))];
+
+      return newState.filter(
+        (element) =>
+          !remoteEraseElements.some(
+            (eraseElement) => eraseElement.id === element.id
+          )
+      );
+    });
+
+    setRemoteEraseElements([]);
+  }, [remoteEraseElements]);
+
+  // Update the remote updated Element
+  useEffect(() => {
+    if (remoteUpdatedElement) {
+      console.log("Updating the Element");
+      setElements((prevState) => {
+        const index = prevState.findIndex(
+          (ele) => ele.id === remoteUpdatedElement.id
+        );
+
+        if (index == -1) {
+          return prevState;
+        }
+
+        const newElements = [...prevState.map((ele) => ({ ...ele }))];
+        newElements[index] = convertElement(
+          remoteUpdatedElement,
+          boardRef as React.RefObject<HTMLCanvasElement>
+        ) as Element;
+
+        return newElements;
+      });
+    }
+  }, [remoteUpdatedElement]);
+
   // Load The Initial Data Recieved From The Server
   useEffect(() => {
     if (socket) {
@@ -435,7 +469,13 @@ export function useCollab({
 
         setScale(payload.scale);
         setPanOffset(payload.panOffset);
-        setElements(payload.elements);
+
+        const convertedElements = convertElements(
+          payload.elements,
+          boardRef as React.RefObject<HTMLCanvasElement>
+        );
+
+        setElements(convertedElements as Element[]);
       });
     }
   }, [socket]);
