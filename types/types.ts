@@ -30,7 +30,8 @@ export type TOOL =
   | "freehand"
   | "text"
   | "pan"
-  | "eraser";
+  | "eraser"
+  | "laser";
 
 export type Action =
   | "drawing"

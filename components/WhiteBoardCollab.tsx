@@ -65,6 +65,7 @@ import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { SessionModal } from "./SessionModal";
 import { useCollab } from "./hooks/useCollab";
+import { useSvg } from "./hooks/useSvg";
 
 type CursorAction =
   | "vertical"
@@ -134,6 +135,12 @@ export function CollaborativeWhiteboard() {
     setElements,
   });
 
+  const {
+    svgRef,
+    handleSvgPointerDown,
+    handleSvgPointerMove,
+    handleSvgPointerUp,
+  } = useSvg({ tool });
   // Focus textarea when writing text
   useEffect(() => {
     if (action === "writing" && textElementRef.current) {
@@ -290,7 +297,7 @@ export function CollaborativeWhiteboard() {
 
   // Utility function to get mouse coordinates adjusted for pan and scale
   const getMouseCoordinates = (
-    event: React.PointerEvent<HTMLCanvasElement>
+    event: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>
   ): Point => {
     const x = (event.clientX - panOffset.x * scale + scaleOffset.x) / scale;
     const y = (event.clientY - panOffset.y * scale + scaleOffset.y) / scale;
@@ -416,7 +423,7 @@ export function CollaborativeWhiteboard() {
   };
 
   // Handler for pointer down events
-  const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const { x: clientX, y: clientY } = getMouseCoordinates(event);
 
     if (action === "writing") return;
@@ -479,7 +486,7 @@ export function CollaborativeWhiteboard() {
   };
 
   // Handler for pointer move events
-  const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const { x: clientX, y: clientY } = getMouseCoordinates(event);
 
     // Handle moving elements
@@ -705,7 +712,7 @@ export function CollaborativeWhiteboard() {
     setAction("selecting");
   };
 
-  const handleDoubleClick = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const handleDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
     const { x: clientX, y: clientY } = getMouseCoordinates(event);
 
     // Check if the click is on the selected Element or not
@@ -759,12 +766,15 @@ export function CollaborativeWhiteboard() {
 
   return (
     <div
-      onPointerUp={handlePointerUp}
+      onPointerUp={() => {
+        handlePointerUp();
+        handleSvgPointerUp();
+      }}
       className="relative z-0"
     >
       {/*Side Menu */}
       <div
-        className="fixed flex top-3 left-3 items-center gap-2"
+        className="fixed flex top-3 left-3 items-center gap-2 z-20"
         style={{
           cursor:
             action === "resizing" || action === "drawing" || action === "moving"
@@ -781,7 +791,7 @@ export function CollaborativeWhiteboard() {
 
       {/* Toolbar */}
       <div
-        className="fixed flex top-4 left-1/2 -translate-x-1/2 items-center gap-2"
+        className="fixed flex top-4 left-1/2 -translate-x-1/2 items-center gap-2 z-20"
         style={{
           cursor:
             action === "resizing" || action === "drawing" || action === "moving"
@@ -799,7 +809,7 @@ export function CollaborativeWhiteboard() {
 
       {/*Share Button */}
       <div
-        className="fixed right-5 top-4"
+        className="fixed right-5 top-4 z-20"
         style={{
           cursor:
             action === "resizing" || action === "drawing" || action === "moving"
@@ -816,7 +826,7 @@ export function CollaborativeWhiteboard() {
 
       {/*Share Modal*/}
       {shareModal && (
-        <div className="fixed w-full h-full z-[1000] flex justify-center items-center">
+        <div className="fixed w-full h-full z-[1000] flex justify-center items-center z-20">
           <div className="z-10 w-[600px]  bg-white rounded-md p-4">
             <SessionModal></SessionModal>
           </div>
@@ -831,7 +841,7 @@ export function CollaborativeWhiteboard() {
 
       {/* Undo/Redo Controls */}
       <div
-        className="fixed bottom-5 left-6 rounded-md shadow-lg"
+        className="fixed bottom-5 left-6 rounded-md shadow-lg z-20"
         style={{
           cursor:
             action === "resizing" || action === "drawing" || action === "moving"
@@ -852,7 +862,7 @@ export function CollaborativeWhiteboard() {
 
       {/* Zoom Controls */}
       <div
-        className="fixed bottom-5 right-6 rounded-md shadow-lg"
+        className="fixed bottom-5 right-6 rounded-md shadow-lg z-20"
         style={{
           cursor:
             action === "resizing" || action === "drawing" || action === "moving"
@@ -877,7 +887,7 @@ export function CollaborativeWhiteboard() {
         tool === "rectangle" ||
         tool === "text") && (
         <div
-          className={`fixed top-28 left-5 p-4 rounded-md shadow-lg ${
+          className={`fixed top-28 left-5 p-4 rounded-md shadow-lg z-20 ${
             darkMode ? "bg-[#232329] text-white" : "bg-white text-black "
           }`}
           style={{
@@ -992,14 +1002,36 @@ export function CollaborativeWhiteboard() {
       )}
 
       {/* Canvas */}
-      <canvas
-        ref={boardRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onDoubleClick={handleDoubleClick}
-        className={`${darkMode ? "bg-black" : "bg-white"} -z-10`}
+      <div
         style={{ cursor: getCursorForTool() }}
-      />
+        onPointerDown={(event) => {
+          handlePointerDown(event);
+          handleSvgPointerDown(event);
+        }}
+        onPointerMove={(event) => {
+          handlePointerMove(event);
+          handleSvgPointerMove(event);
+        }}
+        onDoubleClick={(event) => {
+          handleDoubleClick(event);
+        }}
+      >
+        <div
+          id="svg-wrapper"
+          className="fixed w-[100%] h-[100%]"
+        >
+          <svg
+            ref={svgRef}
+            className=" w-[100%] h-[100%]"
+            pointerEvents="none"
+          ></svg>
+        </div>
+
+        <canvas
+          ref={boardRef}
+          className={`${darkMode ? "bg-black" : "bg-white"} -z-10`}
+        />
+      </div>
     </div>
   );
 }
