@@ -3,6 +3,7 @@ import { handleFreehandMoveAction } from "../freehand/move";
 import { handleLineMoveAction } from "../line/move";
 import { handleRectMoveAction } from "../rectangle/move";
 import { handleTextMove } from "../text/move";
+import { handleImageMove } from "../images/move";
 
 export function handleElementMove(
   client: Point,
@@ -22,6 +23,9 @@ export function handleElementMove(
       return;
     case "text":
       handleTextMove(client, selectedElement, setSelectedElement);
+      return;
+    case "image":
+      handleImageMove(client, selectedElement, setSelectedElement);
       return;
   }
 }

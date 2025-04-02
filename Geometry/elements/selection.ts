@@ -67,6 +67,7 @@ export function handleElementSelection(
       selectedElement &&
       (selectedElement.type === "freehand" ||
         selectedElement.type == "rectangle" ||
+        selectedElement.type === "image" ||
         (selectedElement.type === "line" && selectedElement.isCurved) ||
         selectedElement.type === "text")
     ) {

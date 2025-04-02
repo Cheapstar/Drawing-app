@@ -4,6 +4,7 @@ import { handleLineResize } from "../line/resize";
 import { handleRectResize } from "../rectangle/resize";
 import { adjustElementCoordinates } from "@/Geometry/utils";
 import { handleTextResize } from "../text/resize";
+import { handleImageResize } from "../images/resize";
 
 export function handleElementResize(
   client: Point,
@@ -23,6 +24,9 @@ export function handleElementResize(
       return;
     case "freehand":
       handleFreehandResize(client, selectedElement, setSelectedElement);
+      return;
+    case "image":
+      handleImageResize(client, selectedElement, setSelectedElement);
       return;
   }
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Element } from "@/types/types";
 import { loadElementsFromStorage, saveElementsIntoStorage } from "@/storage";
 import { useSearchParams } from "next/navigation";
+import { ImageRecord } from "./useIndexedDBImages";
 
 export type HistoryState = Element[];
 export type SetHistoryState = (
@@ -9,7 +10,11 @@ export type SetHistoryState = (
   overWrite?: boolean
 ) => void;
 
-export const useHistory = (initialState: HistoryState = []) => {
+export const useHistory = ({
+  initialState = [],
+}: {
+  initialState: HistoryState;
+}) => {
   const [index, setIndex] = useState<number>(0);
   const [history, setHistory] = useState<HistoryState[]>([initialState]);
   const [loadingSavedElements, setLoadingSavedElements] =
@@ -86,19 +91,6 @@ export const useHistory = (initialState: HistoryState = []) => {
       window.removeEventListener("keydown", handleKeyActions);
     };
   }, [handleKeyActions]);
-
-  useEffect(() => {
-    console.log("Loading FRom Local Storage");
-
-    const savedElements = loadElementsFromStorage();
-
-    if (!savedElements || searchParams.get("id")) {
-      return;
-    }
-
-    setState(savedElements);
-    console.log("Loaded From Local Storage", savedElements);
-  }, []);
 
   return {
     elements: history[index] || [],

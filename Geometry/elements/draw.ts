@@ -42,6 +42,19 @@ export const drawElement = (
       drawText(ctx, element);
       ctx.restore();
       break;
+    case "image":
+      ctx.save();
+      const image = new Image();
+      image.src = element.url;
+      ctx.drawImage(
+        image,
+        element.x1,
+        element.y1,
+        element.width,
+        element.height
+      );
+      ctx.restore();
+      break;
   }
 };
 

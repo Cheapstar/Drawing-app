@@ -31,7 +31,8 @@ export type TOOL =
   | "text"
   | "pan"
   | "eraser"
-  | "laser";
+  | "laser"
+  | "insert-image";
 
 export type Action =
   | "drawing"
@@ -138,9 +139,22 @@ export interface FreehandElement extends BaseElement {
   drawnShape?: Drawable;
 }
 
+export interface ImageElement extends BaseElement {
+  type: "image";
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  height: number;
+  width: number;
+  url: string;
+  aspectRatio: number;
+}
+
 // Union type of all possible elements
 export type Element =
   | RectangleElement
   | LineElement
   | TextElement
-  | FreehandElement;
+  | FreehandElement
+  | ImageElement;

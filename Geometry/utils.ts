@@ -5,11 +5,18 @@ import {
   RectangleElement,
   TextElement,
   FreehandElement,
+  ImageElement,
 } from "@/types/types";
 import { checkOnline } from "@/Geometry/line/position";
 import { checkOnRectangle } from "@/Geometry/rectangle/position";
 import { checkOnFreehand } from "@/Geometry/freehand/position";
 import { checkOnText } from "@/Geometry/text/position";
+import {
+  ImageRecord,
+  ImagesDBSchema,
+} from "@/components/hooks/useIndexedDBImages";
+import { IDBPDatabase } from "idb";
+import { checkOnImage } from "./images/position";
 export const getElementAtPosition = (
   clientX: number,
   clientY: number,
@@ -57,6 +64,8 @@ export const checkOnElements = (
         element as TextElement,
         boardRef as React.RefObject<HTMLCanvasElement>
       );
+    case "image":
+      return checkOnImage(client, element, scale as number);
     default:
       return false;
   }
@@ -183,6 +192,7 @@ export function getTheOffsets(elementAtPosition: Element, client: Point) {
     case "rectangle":
     case "line":
     case "text":
+    case "image":
       console.log("Setting up the offsets");
       offsetX.push(client.x - (elementAtPosition.x1 as number));
       offsetY.push(client.y - (elementAtPosition.y1 as number));
@@ -332,26 +342,50 @@ export const adjustElementCoordinates = (element: Element) => {
       newX2,
       newY2,
     };
+  } else if (type === "image") {
+    const { x1, x2, y1, y2 } = element as ImageElement;
+
+    return {
+      newX1: Math.min(x1, x2),
+      newX2: Math.max(x1, x2),
+      newY1: Math.min(y1, y2),
+      newY2: Math.max(y1, y2),
+    };
   }
 
   // Return the original element if it's not a line
   return element;
 };
 
-export function convertElements(
+export async function convertElements(
   elements: Element[],
-  boardRef: React.RefObject<HTMLCanvasElement>
+  boardRef: React.RefObject<HTMLCanvasElement>,
+  getImage: (
+    id: string,
+    DB: IDBPDatabase<ImagesDBSchema> | null
+  ) => Promise<ImageRecord | null>,
+  DB: IDBPDatabase<ImagesDBSchema> | null
 ) {
-  return elements.map((ele) => convertElement(ele, boardRef));
+  return Promise.all(
+    elements.map(
+      async (ele) => await convertElement(ele, boardRef, getImage, DB)
+    )
+  );
 }
 
-export function convertElement(
+export async function convertElement(
   element: Element,
-  boardRef: React.RefObject<HTMLCanvasElement>
+  boardRef: React.RefObject<HTMLCanvasElement>,
+  getImage: (
+    id: string,
+    DB: IDBPDatabase<ImagesDBSchema> | null
+  ) => Promise<ImageRecord | null>,
+  DB: IDBPDatabase<ImagesDBSchema> | null
 ) {
+  console.log("Elements", element);
+
   const { type } = element;
   if (type === "line") {
-    const { x1, y1, x2, y2, type } = element as LineElement;
     const { newX1, newY1, newX2, newY2 } = adjustElementCoordinates(
       element as Element
     );
@@ -397,7 +431,7 @@ export function convertElement(
         y2: newY2,
       },
     };
-  } else {
+  } else if (type === "text") {
     const { x1, y1, text, fontSize, fontFamily } = element;
     const ctx = boardRef.current.getContext("2d");
     if (!ctx) return false;
@@ -430,6 +464,36 @@ export function convertElement(
       width: textWidth,
       height: textHeight,
     };
+  } else {
+    // When Type is equal to the "Image"
+    // fetch the file from the indexeddb and convert it into the image url
+    // then as per the image update it
+
+    console.log("Processing image element:", element.id);
+
+    if (!getImage) {
+      console.warn("getImage function not provided for image element");
+      return element;
+    }
+
+    try {
+      const imageRecord = await getImage(element.id, DB);
+
+      if (imageRecord && imageRecord.blob) {
+        console.log("Image blob found, creating URL");
+        const url = URL.createObjectURL(imageRecord.blob);
+        return {
+          ...element,
+          url,
+        };
+      } else {
+        console.warn(`No image blob found for ID: ${element.id}`);
+        return element;
+      }
+    } catch (error) {
+      console.error("Error converting image element:", error);
+      return element;
+    }
   }
 }
 

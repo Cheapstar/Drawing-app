@@ -3,6 +3,7 @@ import { getLineBoundingElement } from "../line/boundingElement";
 import { getRectBoundingElement } from "../rectangle/boundingElement";
 import { getFreehandBoundingElement } from "../freehand/boundingElement";
 import { getTextBoundingElement } from "../text/boundingElement";
+import { getImageBoundingElement } from "../images/boundingElement";
 
 export function getTheBoundingElement(
   element: Element,
@@ -12,6 +13,8 @@ export function getTheBoundingElement(
   switch (element.type) {
     case "line":
       return getLineBoundingElement(element, scale as number);
+    case "image":
+      return getImageBoundingElement(element, scale as number);
     case "rectangle":
       return getRectBoundingElement(element, scale as number);
     case "freehand":

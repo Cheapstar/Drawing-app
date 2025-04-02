@@ -27,9 +27,10 @@ import {
   RectangleElement,
   LineElement,
   TextElement,
+  ImageElement,
 } from "@/types/types";
 import { HistoryState, useHistory } from "./hooks/history";
-import { convertElement, point } from "@/Geometry/utils";
+import { convertElement, convertElements, point } from "@/Geometry/utils";
 import { adjustElementCoordinates } from "@/Geometry/utils";
 import { drawElement } from "@/Geometry/elements/draw";
 
@@ -59,6 +60,8 @@ import { ShareModal } from "./ShareModal";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { useSvg } from "./hooks/useSvg";
+import { useIndexedDBImages } from "./hooks/useIndexedDBImages";
+import { loadElementsFromStorage } from "@/storage";
 
 type CursorAction =
   | "vertical"
@@ -69,6 +72,7 @@ type CursorAction =
   | "none";
 
 export function WhiteBoard() {
+  const { images, storeImage, getImage, db } = useIndexedDBImages();
   const {
     elements,
     setElements,
@@ -76,7 +80,7 @@ export function WhiteBoard() {
     redo,
     loadingSavedElements,
     setLoadingSavedElements,
-  } = useHistory([]);
+  } = useHistory({ initialState: [] });
   const [tool, setTool] = useAtom(toolAtom);
   const [action, setAction] = useState<Action>("none");
   const [selectedElement, setSelectedElement] = useState<Element | null>(null);
@@ -118,6 +122,8 @@ export function WhiteBoard() {
     handleSvgPointerMove,
     handleSvgPointerUp,
   } = useSvg({ tool });
+
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Focus textarea when writing text
   useEffect(() => {
@@ -176,6 +182,7 @@ export function WhiteBoard() {
     boardRef.current.height = height * dpr;
     boardRef.current.style.width = `${width}px`;
     boardRef.current.style.height = `${height}px`;
+    renderElements();
   }, []);
 
   // Set up event listeners
@@ -233,6 +240,8 @@ export function WhiteBoard() {
     if (drawingElement && drawingElement.type != "text") {
       drawElement(rc, ctx, drawingElement);
     }
+
+    // console.log("Elements are ", elements);
 
     // Draw all elements
     elements.forEach((element: Element) => {
@@ -556,7 +565,7 @@ export function WhiteBoard() {
 
   // Handler for pointer up events
   // Fix for the handlePointerUp function
-  const handlePointerUp = () => {
+  const handlePointerUp = async () => {
     // Handle erasing
     if (action === "erasing") {
       if (eraseElements.length === 0) {
@@ -579,9 +588,11 @@ export function WhiteBoard() {
 
     // Finalize drawing
     if (action === "drawing") {
-      const convertedElement = convertElement(
+      const convertedElement = await convertElement(
         drawingElement as Element,
-        boardRef as React.RefObject<HTMLCanvasElement>
+        boardRef as React.RefObject<HTMLCanvasElement>,
+        getImage,
+        db
       );
       setElements([
         ...elements,
@@ -611,7 +622,7 @@ export function WhiteBoard() {
   };
 
   // Handle text input blur (finalize text element)
-  const handleDrawingTextBlur = () => {
+  const handleDrawingTextBlur = async () => {
     if (
       !drawingElement ||
       drawingElement.type !== "text" ||
@@ -620,9 +631,11 @@ export function WhiteBoard() {
       return;
 
     if (drawingElement.text != "" && drawingElement.text != "\n") {
-      const updatedElement = convertElement(
+      const updatedElement = await convertElement(
         drawingElement as Element,
-        boardRef as React.RefObject<HTMLCanvasElement>
+        boardRef as React.RefObject<HTMLCanvasElement>,
+        getImage,
+        db
       );
 
       setElements([...elements, updatedElement] as HistoryState);
@@ -666,7 +679,7 @@ export function WhiteBoard() {
     };
   }, [selectedElement]);
 
-  const handleUpdatingTextBlur = () => {
+  const handleUpdatingTextBlur = async () => {
     if (
       !updatingElement ||
       updatingElement.type !== "text" ||
@@ -677,9 +690,11 @@ export function WhiteBoard() {
     if (updatingElement.text === "" || updatingElement.text === "\n") {
       deleteElement(elements, updatingElement, setUpdatingElement, setElements);
     } else {
-      const updatedElement = convertElement(
+      const updatedElement = await convertElement(
         updatingElement as Element,
-        boardRef as React.RefObject<HTMLCanvasElement>
+        boardRef as React.RefObject<HTMLCanvasElement>,
+        getImage,
+        db
       );
 
       const newElements = [...elements];
@@ -725,11 +740,139 @@ export function WhiteBoard() {
     }
   };
 
+  const handleImageInputChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = event.target.files as FileList;
+    const imageElements = [];
+
+    // Create all image elements with proper positioning
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const element = await createImageElement(file, i, files.length);
+      imageElements.push(element);
+      await storeImage(file, element.id);
+    }
+
+    setElements([...elements, ...imageElements]);
+  };
+
+  async function createImageElement(
+    file: File,
+    index: number,
+    totalFiles: number
+  ): Promise<ImageElement> {
+    const { height, width, url, aspectRatio } = await getImageDimensions(file);
+
+    // Get viewport dimensions
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Calculate positions based on number of files
+    let x1, y1;
+
+    if (totalFiles === 1) {
+      // Center the image in the viewport
+      x1 = panOffset.x + (viewportWidth / scale - width) / 2;
+      y1 = panOffset.y + (viewportHeight / scale - height) / 2;
+    } else {
+      // For multiple images, create a grid layout
+      const columns = Math.ceil(Math.sqrt(totalFiles));
+      const rows = Math.ceil(totalFiles / columns);
+
+      // Calculate grid cell dimensions
+      const cellWidth = viewportWidth / scale / columns;
+      const cellHeight = viewportHeight / scale / rows;
+
+      // Calculate position within the grid
+      const col = index % columns;
+      const row = Math.floor(index / columns);
+
+      // Center the image within its grid cell
+      x1 = panOffset.x + col * cellWidth + (cellWidth - width) / 2;
+      y1 = panOffset.y + row * cellHeight + (cellHeight - height) / 2;
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      type: "image",
+      x1: x1,
+      y1: y1,
+      x2: x1 + width,
+      y2: y1 + height,
+      height: height,
+      width: width,
+      url: url,
+      aspectRatio,
+    };
+  }
+
+  const getImageDimensions = (
+    file: File
+  ): Promise<{
+    width: number;
+    height: number;
+    url: string;
+    aspectRatio: number;
+  }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+
+      img.onload = () => {
+        resolve({
+          width: img.width,
+          height: img.height,
+          url,
+          aspectRatio: img.width / img.height,
+        });
+      };
+
+      img.onerror = () => {
+        reject(new Error("Failed to load image"));
+      };
+
+      img.src = url;
+    });
+  };
+
   useEffect(() => {
     const id = searchParams.get("id");
 
+    async function loadElementsFromClientStorage() {
+      if (!db) {
+        console.log("Waiting for database to be ready...");
+        return false;
+      }
+
+      const savedElements = loadElementsFromStorage();
+      if (!savedElements) {
+        return false;
+      }
+
+      console.log(
+        "Converting saved elements with DB:",
+        db ? "available" : "not available"
+      );
+      const convertedElements = await convertElements(
+        savedElements,
+        boardRef as React.RefObject<HTMLCanvasElement>,
+        getImage,
+        db
+      );
+
+      return convertedElements;
+    }
+
     if (!id) {
-      setLoadingSavedElements(false);
+      if (db) {
+        // Only proceed if db is ready
+        loadElementsFromClientStorage().then((resolve) => {
+          if (!resolve) return;
+          setElements(resolve as HistoryState);
+          setLoadingSavedElements(false);
+        });
+      }
       return;
     }
 
@@ -739,7 +882,7 @@ export function WhiteBoard() {
         params: { id: id },
       })
       .then((response) => {
-        console.log("Loading the REsponse is", response);
+        console.log("Loading the Response is", response);
 
         setTimeout(() => {
           setElements(response.data.elements);
@@ -749,8 +892,15 @@ export function WhiteBoard() {
           setLoadingSavedElements(false);
         }, 1000);
       });
-  }, []);
+  }, [db, searchParams]);
 
+  // For Insert Image Function
+  useEffect(() => {
+    if (tool === "insert-image" && imageInputRef.current) {
+      imageInputRef.current.click();
+      setTool("select");
+    }
+  }, [tool]);
   return (
     <div
       onPointerUp={() => {
@@ -760,10 +910,18 @@ export function WhiteBoard() {
       className="relative z-0"
     >
       {/*Image Drag and Drop*/}
+      <div className="-z-20 hidden w-[100%] h-[100%]  fixed">
+        <input
+          multiple
+          type="file"
+          onChange={handleImageInputChange}
+          ref={imageInputRef}
+        />
+      </div>
 
       {/*Side Menu */}
       <div
-        className="z-20"
+        className="fixed top-4 left-4 z-[100] cursor-pointer"
         style={{
           cursor:
             action === "resizing" || action === "drawing" || action === "moving"
@@ -1008,6 +1166,19 @@ export function WhiteBoard() {
         onDoubleClick={(event) => {
           handleDoubleClick(event);
         }}
+        onDrop={(event) => {
+          event.preventDefault();
+          event.stopPropagation(); // Stop the event from bubbling further
+
+          if (imageInputRef.current) {
+            imageInputRef.current.files = event.dataTransfer.files;
+            console.log("Dropping the files");
+            imageInputRef.current.dispatchEvent(
+              new Event("change", { bubbles: true })
+            );
+          }
+        }}
+        onDragOver={(event) => event.preventDefault()} // Needed to allow dropping
       >
         <div
           id="svg-wrapper"

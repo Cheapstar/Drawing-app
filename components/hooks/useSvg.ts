@@ -179,8 +179,8 @@ export function useSvg({ tool }: { tool: TOOL }) {
         }
 
         linesRef.current[linesRef.current.length - 1].push([
-          event.clientX,
-          event.clientY,
+          event.clientX - 10,
+          event.clientY - 10,
         ]);
 
         updateLaser();

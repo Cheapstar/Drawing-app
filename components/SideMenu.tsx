@@ -23,23 +23,23 @@ export function SideMenu({ setElements }: props) {
 
   return (
     <div
-      className="fixed h-full"
+      className="relative"
       onClick={() => {
         setShowSideMenu(false);
       }}
     >
       <button
-        className="absolute top-4 left-4 bg-[#0D92F4] 
+        className=" bg-[#0D92F4] 
       rounded-md p-2 cursor-pointer hover:bg-[#006BFF] transition-all"
         onClick={(e) => {
           e.stopPropagation();
-          setShowSideMenu(true);
+          setShowSideMenu(!showSideMenu);
         }}
       >
         <GiHamburgerMenu className="text-xl text-white"></GiHamburgerMenu>
       </button>
       {showSideMenu && (
-        <nav className="absolute top-16 left-4  border-gray-400 shadow-lg px-2 py-2 font-sans text-sm">
+        <nav className="absolute top-10 left-0  border-gray-400 shadow-lg px-2 py-2 font-sans text-sm">
           <ul>
             <li>
               <button
