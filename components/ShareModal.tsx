@@ -10,6 +10,7 @@ import { FaPlay } from "react-icons/fa";
 import { ImSpinner8 } from "react-icons/im";
 
 import { useRouter } from "next/navigation";
+import { convertElementsIntoSerilizable } from "@/Geometry/utils";
 
 type LoadingState = "none" | "sharing-link" | "copying" | "starting-session";
 
@@ -29,10 +30,11 @@ export function ShareModal({
   const handleShareAbleLink = async () => {
     setLoadingState("sharing-link");
 
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const newElements = await convertElementsIntoSerilizable(elements);
+    console.log("Serialized Elements", newElements);
     axios
       .post("http://localhost:8080/create-link", {
-        elements: elements,
+        elements: newElements,
         panOffset,
         scale,
       })

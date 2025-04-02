@@ -72,7 +72,8 @@ type CursorAction =
   | "none";
 
 export function WhiteBoard() {
-  const { images, storeImage, getImage, db } = useIndexedDBImages();
+  const { images, storeImage, getImage, db, deleteImage } =
+    useIndexedDBImages();
   const {
     elements,
     setElements,
@@ -592,7 +593,8 @@ export function WhiteBoard() {
         drawingElement as Element,
         boardRef as React.RefObject<HTMLCanvasElement>,
         getImage,
-        db
+        db,
+        storeImage
       );
       setElements([
         ...elements,
@@ -635,7 +637,8 @@ export function WhiteBoard() {
         drawingElement as Element,
         boardRef as React.RefObject<HTMLCanvasElement>,
         getImage,
-        db
+        db,
+        storeImage
       );
 
       setElements([...elements, updatedElement] as HistoryState);
@@ -694,7 +697,8 @@ export function WhiteBoard() {
         updatingElement as Element,
         boardRef as React.RefObject<HTMLCanvasElement>,
         getImage,
-        db
+        db,
+        storeImage
       );
 
       const newElements = [...elements];
@@ -858,7 +862,8 @@ export function WhiteBoard() {
         savedElements,
         boardRef as React.RefObject<HTMLCanvasElement>,
         getImage,
-        db
+        db,
+        storeImage
       );
 
       return convertedElements;
@@ -877,21 +882,32 @@ export function WhiteBoard() {
     }
 
     console.log("Sending the request");
-    axios
-      .get("http://localhost:8080/fetch-elements", {
-        params: { id: id },
-      })
-      .then((response) => {
-        console.log("Loading the Response is", response);
+    if (db) {
+      axios
+        .get("http://localhost:8080/fetch-elements", {
+          params: { id: id },
+        })
+        .then((response) => {
+          console.log("Loading the Response is", response);
 
-        setTimeout(() => {
-          setElements(response.data.elements);
-          setScale(response.data.scale);
-          setPanOffset(response.data.panOffset);
+          setTimeout(async () => {
+            // convert received elements
+            const newElements = await convertElements(
+              response.data.elements,
+              boardRef as React.RefObject<HTMLCanvasElement>,
+              getImage,
+              db,
+              storeImage
+            );
 
-          setLoadingSavedElements(false);
-        }, 1000);
-      });
+            setElements(newElements as Element[]);
+            setScale(response.data.scale);
+            setPanOffset(response.data.panOffset);
+
+            setLoadingSavedElements(false);
+          }, 0);
+        });
+    }
   }, [db, searchParams]);
 
   // For Insert Image Function

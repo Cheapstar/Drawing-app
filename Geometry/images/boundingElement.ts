@@ -8,13 +8,12 @@ export function getImageBoundingElement(element: ImageElement, scale: number) {
   const y2 = Math.max(element.y1, element.y2);
 
   return {
-    x1: x1 - PADDING.rectangle,
-    x2: x2 + PADDING.rectangle,
-    y1: y1 - PADDING.rectangle,
-    y2: y2 + PADDING.rectangle,
-    padding: PADDING.rectangle,
-    width: x2 - x1 + 2 * PADDING.rectangle,
-    height: y2 - y1 + 2 * PADDING.rectangle,
+    x1: x1,
+    x2: x2,
+    y1: y1,
+    y2: y2,
+    width: x2 - x1,
+    height: y2 - y1,
     type: "image",
     strokeWidth: element.strokeWidth,
   };

@@ -364,11 +364,17 @@ export async function convertElements(
     id: string,
     DB: IDBPDatabase<ImagesDBSchema> | null
   ) => Promise<ImageRecord | null>,
-  DB: IDBPDatabase<ImagesDBSchema> | null
+  DB: IDBPDatabase<ImagesDBSchema> | null,
+  storeImage: (
+    file: File,
+    id: string,
+    name?: string
+  ) => Promise<ImageRecord | null>
 ) {
   return Promise.all(
     elements.map(
-      async (ele) => await convertElement(ele, boardRef, getImage, DB)
+      async (ele) =>
+        await convertElement(ele, boardRef, getImage, DB, storeImage)
     )
   );
 }
@@ -380,7 +386,12 @@ export async function convertElement(
     id: string,
     DB: IDBPDatabase<ImagesDBSchema> | null
   ) => Promise<ImageRecord | null>,
-  DB: IDBPDatabase<ImagesDBSchema> | null
+  DB: IDBPDatabase<ImagesDBSchema> | null,
+  storeImage: (
+    file: File,
+    id: string,
+    name?: string
+  ) => Promise<ImageRecord | null>
 ) {
   console.log("Elements", element);
 
@@ -469,6 +480,10 @@ export async function convertElement(
     // fetch the file from the indexeddb and convert it into the image url
     // then as per the image update it
 
+    if (element.url.startsWith("data:image")) {
+      const file = base64ToFile(element.url, element.id);
+      await storeImage(file, element.id, "");
+    }
     console.log("Processing image element:", element.id);
 
     if (!getImage) {
@@ -495,6 +510,40 @@ export async function convertElement(
       return element;
     }
   }
+}
+
+export async function convertElementsIntoSerilizable(elements: Element[]) {
+  const newElements = await Promise.all(
+    elements.map(async (element) => {
+      if (element.type != "image") return element;
+
+      const response = await fetch(element.url);
+      const blob = await response.blob();
+
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      return { ...element, url: base64 }; // ✅ Return updated element
+    })
+  );
+  return newElements;
+}
+
+function base64ToFile(base64: string, fileName: string): File {
+  const arr = base64.split(",");
+  const mimeMatch = arr[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : "image/png";
+  const byteString = atob(arr[1]);
+  const byteArray = new Uint8Array(byteString.length);
+
+  for (let i = 0; i < byteString.length; i++) {
+    byteArray[i] = byteString.charCodeAt(i);
+  }
+
+  return new File([byteArray], fileName, { type: mime });
 }
 
 /*

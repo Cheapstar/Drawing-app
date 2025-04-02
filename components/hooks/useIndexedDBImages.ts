@@ -14,12 +14,13 @@ export interface ImageRecord {
   id: string;
   blob: Blob;
   createdAt: number;
+  base64?: string;
   name?: string;
 }
 
 const DB_NAME = "X-Draw";
 const STORE_NAME = "images";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export function useIndexedDBImages() {
   const [db, setDb] = useState<IDBPDatabase<ImagesDBSchema> | null>(null);
