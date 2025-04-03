@@ -337,6 +337,11 @@ export function useCollab({
               height: element.height,
               width: element.width,
             };
+
+            if (element.type === "line") {
+              (updatedElements[index] as LineElement).controlPoint =
+                element.controlPoint;
+            }
           }
 
           return updatedElements;
@@ -474,6 +479,11 @@ export function useCollab({
             height: resizedElement.height,
             width: resizedElement.width,
           } as Element;
+
+          if (resizedElement.type === "line") {
+            (newState[index] as LineElement).controlPoint =
+              resizedElement.controlPoint;
+          }
         }
       });
 
