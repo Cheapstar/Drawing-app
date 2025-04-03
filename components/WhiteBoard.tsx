@@ -758,7 +758,8 @@ export function WhiteBoard() {
       await storeImage(file, element.id);
     }
 
-    setElements([...elements, ...imageElements]);
+    const updatedElements = updateImageElementCoordinates(imageElements);
+    setElements([...elements, ...updatedElements]);
   };
 
   async function createImageElement(
@@ -768,34 +769,8 @@ export function WhiteBoard() {
   ): Promise<ImageElement> {
     const { height, width, url, aspectRatio } = await getImageDimensions(file);
 
-    // Get viewport dimensions
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    // Calculate positions based on number of files
-    let x1, y1;
-
-    if (totalFiles === 1) {
-      // Center the image in the viewport
-      x1 = panOffset.x + (viewportWidth / scale - width) / 2;
-      y1 = panOffset.y + (viewportHeight / scale - height) / 2;
-    } else {
-      // For multiple images, create a grid layout
-      const columns = Math.ceil(Math.sqrt(totalFiles));
-      const rows = Math.ceil(totalFiles / columns);
-
-      // Calculate grid cell dimensions
-      const cellWidth = viewportWidth / scale / columns;
-      const cellHeight = viewportHeight / scale / rows;
-
-      // Calculate position within the grid
-      const col = index % columns;
-      const row = Math.floor(index / columns);
-
-      // Center the image within its grid cell
-      x1 = panOffset.x + col * cellWidth + (cellWidth - width) / 2;
-      y1 = panOffset.y + row * cellHeight + (cellHeight - height) / 2;
-    }
+    const x1 = panOffset.x * scale;
+    const y1 = panOffset.y * scale;
 
     return {
       id: crypto.randomUUID(),
@@ -838,6 +813,34 @@ export function WhiteBoard() {
 
       img.src = url;
     });
+  };
+
+  const updateImageElementCoordinates = (elements: ImageElement[]) => {
+    const updatedElements = [...elements];
+    const totalElements = updatedElements.length;
+    const initX = updatedElements[0].x1;
+    const initY = updatedElements[0].y1;
+    let maxHeight = updatedElements[0].height;
+
+    for (let i = 1; i < elements.length; i++) {
+      if (i === Math.ceil(totalElements / 2)) {
+        updatedElements[i].x1 = initX;
+        updatedElements[i].y1 = initY + maxHeight;
+        updatedElements[i].x2 = initX + updatedElements[i].width;
+        updatedElements[i].y2 = initY + updatedElements[i].height;
+      } else {
+        updatedElements[i].x1 = updatedElements[i - 1].x2;
+        updatedElements[i].y1 = updatedElements[i - 1].y1;
+        updatedElements[i].x2 =
+          updatedElements[i - 1].x2 + updatedElements[i].width;
+        updatedElements[i].y2 =
+          updatedElements[i - 1].y1 + updatedElements[i].height;
+      }
+
+      maxHeight = Math.max(updatedElements[i].height, maxHeight);
+    }
+
+    return updatedElements;
   };
 
   useEffect(() => {
@@ -990,7 +993,11 @@ export function WhiteBoard() {
       {/*Share Modal*/}
       {shareModal && (
         <div className="fixed w-full h-full z-[1000] flex justify-center items-center">
-          <div className="z-10 w-[600px] bg-white rounded-md p-16">
+          <div
+            className={`z-10 w-[600px]  rounded-md p-16 ${
+              darkMode ? "bg-[#232329] text-white" : "bg-white text-black"
+            } `}
+          >
             <ShareModal
               elements={elements as Element[]}
               panOffset={panOffset}

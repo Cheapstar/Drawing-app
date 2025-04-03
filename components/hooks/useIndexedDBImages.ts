@@ -88,16 +88,22 @@ export function useIndexedDBImages() {
       if (!db) return null;
 
       try {
-        const timestamp = Date.now();
-        const imageRecord: ImageRecord = {
-          id: id,
-          blob: file,
-          createdAt: timestamp,
-          name: name || `image-${timestamp}`,
-        };
+        // Check if key already exists or not
+        const checkExist = await db.get("images", id);
+        if (checkExist) {
+          return checkExist;
+        } else {
+          const timestamp = Date.now();
+          const imageRecord: ImageRecord = {
+            id: id,
+            blob: file,
+            createdAt: timestamp,
+            name: name || `image-${timestamp}`,
+          };
 
-        await db.add(STORE_NAME, imageRecord);
-        return imageRecord;
+          await db.add(STORE_NAME, imageRecord);
+          return imageRecord;
+        }
       } catch (err) {
         console.error("Error storing image:", err);
         setError(err instanceof Error ? err : new Error(String(err)));

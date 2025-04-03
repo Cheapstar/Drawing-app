@@ -11,6 +11,8 @@ import { ImSpinner8 } from "react-icons/im";
 
 import { useRouter } from "next/navigation";
 import { convertElementsIntoSerilizable } from "@/Geometry/utils";
+import { useAtom } from "jotai";
+import { darkModeAtom } from "@/store/store";
 
 type LoadingState = "none" | "sharing-link" | "copying" | "starting-session";
 
@@ -25,6 +27,8 @@ export function ShareModal({
 }) {
   const [loadingState, setLoadingState] = useState<LoadingState>("none");
   const [sharedLink, setSharedLink] = useState<string | null>(null);
+  const [darkMode] = useAtom(darkModeAtom);
+
   const router = useRouter();
 
   const handleShareAbleLink = async () => {
@@ -67,11 +71,13 @@ export function ShareModal({
     }
   };
 
-  const handleStartSession = () => {
+  const handleStartSession = async () => {
     setLoadingState("starting-session");
+    const newElements = await convertElementsIntoSerilizable(elements);
+
     axios
       .post("http://localhost:8080/start-session", {
-        elements,
+        elements: newElements,
         scale,
         panOffset,
       })
@@ -87,7 +93,9 @@ export function ShareModal({
 
   return (
     <div
-      className="flex flex-col w-full"
+      className={`flex flex-col w-full ${
+        darkMode ? "bg-[#232329] text-white" : "bg-white text-black"
+      } `}
       onClick={(e) => {
         e.stopPropagation();
       }}
@@ -99,8 +107,10 @@ export function ShareModal({
           </h1>
           <div className="flex gap-2 overflow-hidden w-full ">
             <p
-              className="w-[70%] text-md bg-gray-300 font-sans font-normal
-             rounded-md px-3 py-2 grow text-nowrap overflow-hidden text-ellipsis"
+              className={`w-[70%] text-md font-sans font-normal
+             rounded-md px-3 py-2 grow text-nowrap overflow-hidden text-ellipsis ${
+               darkMode ? "bg-[#727276] text-white" : "bg-gray-300 text-black"
+             }`}
             >
               {`http://localhost:3000?id=${sharedLink}`}
             </p>
@@ -164,7 +174,11 @@ export function ShareModal({
           </div>
 
           <div className="border-t flex justify-center">
-            <span className="block font-sans -translate-y-3.5 bg-white px-2">
+            <span
+              className={`block font-sans -translate-y-3.5 px-2 ${
+                darkMode ? "bg-[#232329] text-white" : "bg-white text-black"
+              } `}
+            >
               Or
             </span>
           </div>

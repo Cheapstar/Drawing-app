@@ -17,6 +17,7 @@ import {
   darkModeAtom,
   fontFamilyAtom,
   fontSizeAtom,
+  roomIdAtom,
   showShareModalAtom,
   strokeWidthAtom,
   toolAtom,
@@ -33,9 +34,15 @@ import {
   RectangleElement,
   LineElement,
   TextElement,
+  ImageElement,
 } from "@/types/types";
 import { HistoryState, useHistory } from "./hooks/history";
-import { convertElement, point } from "@/Geometry/utils";
+import {
+  convertElement,
+  convertElements,
+  convertElementsIntoSerilizable,
+  point,
+} from "@/Geometry/utils";
 import { adjustElementCoordinates } from "@/Geometry/utils";
 import { drawCursor, drawElement } from "@/Geometry/elements/draw";
 
@@ -66,6 +73,8 @@ import axios from "axios";
 import { SessionModal } from "./SessionModal";
 import { useCollab } from "./hooks/useCollab";
 import { useSvg } from "./hooks/useSvg";
+import { useIndexedDBImages } from "./hooks/useIndexedDBImages";
+import { loadElementsFromStorage } from "@/storage";
 
 type CursorAction =
   | "vertical"
@@ -76,6 +85,8 @@ type CursorAction =
   | "none";
 
 export function CollaborativeWhiteboard() {
+  const { images, storeImage, getImage, db, deleteImage } =
+    useIndexedDBImages();
   const {
     elements,
     setElements,
@@ -83,7 +94,7 @@ export function CollaborativeWhiteboard() {
     redo,
     loadingSavedElements,
     setLoadingSavedElements,
-  } = useHistory([]);
+  } = useHistory({ initialState: [] });
   const [tool, setTool] = useAtom(toolAtom);
   const [action, setAction] = useState<Action>("none");
   const [selectedElement, setSelectedElement] = useState<Element | null>(null);
@@ -120,7 +131,7 @@ export function CollaborativeWhiteboard() {
 
   const searchParams = useSearchParams();
 
-  const { participants, remoteElements } = useCollab({
+  const { participants, remoteElements, socket } = useCollab({
     drawingElement,
     selectedElement,
     updatingElement,
@@ -133,6 +144,9 @@ export function CollaborativeWhiteboard() {
     setScale,
     setPanOffset,
     setElements,
+    db,
+    getImage,
+    storeImage,
   });
 
   const {
@@ -141,6 +155,9 @@ export function CollaborativeWhiteboard() {
     handleSvgPointerMove,
     handleSvgPointerUp,
   } = useSvg({ tool });
+
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
   // Focus textarea when writing text
   useEffect(() => {
     if (action === "writing" && textElementRef.current) {
@@ -196,8 +213,8 @@ export function CollaborativeWhiteboard() {
 
     boardRef.current.width = width * dpr;
     boardRef.current.height = height * dpr;
-    boardRef.current.style.width = width + "px";
-    boardRef.current.style.height = height + "px";
+    boardRef.current.style.width = `${width}px`;
+    boardRef.current.style.height = `${height}px`;
   }, []);
 
   // Set up event listeners
@@ -207,7 +224,6 @@ export function CollaborativeWhiteboard() {
     return () => window.removeEventListener("resize", resizeCanvas);
   }, [resizeCanvas]);
 
-  // Add a separate effect to update scaleOffset only when scale or canvas size changes
   useEffect(() => {
     const canvas = boardRef.current;
     if (!canvas) return;
@@ -222,7 +238,6 @@ export function CollaborativeWhiteboard() {
     setScaleOffset({ x: scaleOffsetX, y: scaleOffsetY });
   }, [scale, boardRef.current?.width, boardRef.current?.height]);
 
-  // Draw the canvas
   useLayoutEffect(() => {
     const canvas = boardRef.current;
     if (!canvas) return;
@@ -569,7 +584,7 @@ export function CollaborativeWhiteboard() {
 
   // Handler for pointer up events
   // Fix for the handlePointerUp function
-  const handlePointerUp = () => {
+  const handlePointerUp = async () => {
     // Handle erasing
     if (action === "erasing") {
       if (eraseElements.length === 0) {
@@ -592,9 +607,12 @@ export function CollaborativeWhiteboard() {
 
     // Finalize drawing
     if (action === "drawing") {
-      const convertedElement = convertElement(
+      const convertedElement = await convertElement(
         drawingElement as Element,
-        boardRef as React.RefObject<HTMLCanvasElement>
+        boardRef as React.RefObject<HTMLCanvasElement>,
+        getImage,
+        db,
+        storeImage
       );
       setElements([
         ...elements,
@@ -624,7 +642,7 @@ export function CollaborativeWhiteboard() {
   };
 
   // Handle text input blur (finalize text element)
-  const handleDrawingTextBlur = () => {
+  const handleDrawingTextBlur = async () => {
     if (
       !drawingElement ||
       drawingElement.type !== "text" ||
@@ -633,9 +651,12 @@ export function CollaborativeWhiteboard() {
       return;
 
     if (drawingElement.text != "" && drawingElement.text != "\n") {
-      const updatedElement = convertElement(
+      const updatedElement = await convertElement(
         drawingElement as Element,
-        boardRef as React.RefObject<HTMLCanvasElement>
+        boardRef as React.RefObject<HTMLCanvasElement>,
+        getImage,
+        db,
+        storeImage
       );
 
       setElements([...elements, updatedElement] as HistoryState);
@@ -679,7 +700,7 @@ export function CollaborativeWhiteboard() {
     };
   }, [selectedElement]);
 
-  const handleUpdatingTextBlur = () => {
+  const handleUpdatingTextBlur = async () => {
     if (
       !updatingElement ||
       updatingElement.type !== "text" ||
@@ -690,9 +711,12 @@ export function CollaborativeWhiteboard() {
     if (updatingElement.text === "" || updatingElement.text === "\n") {
       deleteElement(elements, updatingElement, setUpdatingElement, setElements);
     } else {
-      const updatedElement = convertElement(
+      const updatedElement = await convertElement(
         updatingElement as Element,
-        boardRef as React.RefObject<HTMLCanvasElement>
+        boardRef as React.RefObject<HTMLCanvasElement>,
+        getImage,
+        db,
+        storeImage
       );
 
       const newElements = [...elements];
@@ -738,31 +762,130 @@ export function CollaborativeWhiteboard() {
     }
   };
 
-  useEffect(() => {
-    const id = searchParams.get("id");
+  const handleImageInputChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = event.target.files as FileList;
+    const imageElements = [];
 
-    if (!id) {
-      setLoadingSavedElements(false);
-      return;
+    // Create all image elements with proper positioning
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const element = await createImageElement(file, i, files.length);
+      imageElements.push(element);
+      await storeImage(file, element.id);
+    }
+    const updatedElements = updateImageElementCoordinates(imageElements);
+
+    if (socket) {
+      const serializedElements = await convertElementsIntoSerilizable(
+        updatedElements
+      );
+
+      const roomId = searchParams.get("join");
+
+      console.log("SEnding The Images");
+      console.log("Socket is", socket);
+      socket.send("images-added", {
+        roomId: roomId,
+        elements: serializedElements,
+      });
     }
 
-    console.log("Sending the request");
-    axios
-      .get("http://localhost:8080/fetch-elements", {
-        params: { id: id },
-      })
-      .then((response) => {
-        console.log("Loading the REsponse is", response);
+    setElements([...elements, ...updatedElements]);
+  };
+  async function createImageElement(
+    file: File,
+    index: number,
+    totalFiles: number
+  ): Promise<ImageElement> {
+    const { height, width, url, aspectRatio } = await getImageDimensions(file);
 
-        setTimeout(() => {
-          setElements(response.data.elements);
-          setScale(response.data.scale);
-          setPanOffset(response.data.panOffset);
+    const x1 = panOffset.x * scale;
+    const y1 = panOffset.y * scale;
 
-          setLoadingSavedElements(false);
-        }, 1000);
-      });
-  }, []);
+    return {
+      id: crypto.randomUUID(),
+      type: "image",
+      x1: x1,
+      y1: y1,
+      x2: x1 + width,
+      y2: y1 + height,
+      height: height,
+      width: width,
+      url: url,
+      aspectRatio,
+    };
+  }
+
+  const getImageDimensions = (
+    file: File
+  ): Promise<{
+    width: number;
+    height: number;
+    url: string;
+    aspectRatio: number;
+  }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+
+      img.onload = () => {
+        resolve({
+          width: img.width,
+          height: img.height,
+          url,
+          aspectRatio: img.width / img.height,
+        });
+      };
+
+      img.onerror = () => {
+        reject(new Error("Failed to load image"));
+      };
+
+      img.src = url;
+    });
+  };
+
+  const updateImageElementCoordinates = (elements: ImageElement[]) => {
+    const updatedElements = [...elements];
+    const totalElements = updatedElements.length;
+    const initX = updatedElements[0].x1;
+    const initY = updatedElements[0].y1;
+    let maxHeight = updatedElements[0].height;
+
+    for (let i = 1; i < elements.length; i++) {
+      if (i === Math.ceil(totalElements / 2)) {
+        updatedElements[i].x1 = initX;
+        updatedElements[i].y1 = initY + maxHeight;
+        updatedElements[i].x2 = initX + updatedElements[i].width;
+        updatedElements[i].y2 = initY + updatedElements[i].height;
+      } else {
+        updatedElements[i].x1 = updatedElements[i - 1].x2;
+        updatedElements[i].y1 = updatedElements[i - 1].y1;
+        updatedElements[i].x2 =
+          updatedElements[i - 1].x2 + updatedElements[i].width;
+        updatedElements[i].y2 =
+          updatedElements[i - 1].y1 + updatedElements[i].height;
+      }
+
+      maxHeight = Math.max(updatedElements[i].height, maxHeight);
+    }
+
+    return updatedElements;
+  };
+
+  useEffect(() => {
+    setLoadingSavedElements(false);
+  }, [db, searchParams]);
+
+  // For Insert Image Function
+  useEffect(() => {
+    if (tool === "insert-image" && imageInputRef.current) {
+      imageInputRef.current.click();
+      setTool("select");
+    }
+  }, [tool]);
 
   return (
     <div
@@ -772,6 +895,15 @@ export function CollaborativeWhiteboard() {
       }}
       className="relative z-0"
     >
+      {/*Image Drag and Drop*/}
+      <div className="-z-20 hidden w-[100%] h-[100%]  fixed">
+        <input
+          multiple
+          type="file"
+          onChange={handleImageInputChange}
+          ref={imageInputRef}
+        />
+      </div>
       {/*Side Menu */}
       <div
         className="fixed flex top-3 left-3 items-center gap-2 z-20"
@@ -826,8 +958,12 @@ export function CollaborativeWhiteboard() {
 
       {/*Share Modal*/}
       {shareModal && (
-        <div className="fixed w-full h-full z-[1000] flex justify-center items-center z-20">
-          <div className="z-10 w-[600px]  bg-white rounded-md p-4">
+        <div className="fixed w-full h-full flex justify-center items-center z-20">
+          <div
+            className={`z-10 w-[600px]  rounded-md p-4 ${
+              darkMode ? "bg-[#232329] text-white" : "bg-white text-black"
+            } `}
+          >
             <SessionModal></SessionModal>
           </div>
           <div

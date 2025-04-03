@@ -65,6 +65,8 @@ export interface BaseElement {
   offsetX?: number[];
   offsetY?: number[];
   isSelected?: boolean;
+  height?: number;
+  width?: number;
 }
 
 export interface BoundingElement {

@@ -1,6 +1,8 @@
 "use client";
+import { darkModeAtom } from "@/store/store";
 import { TOOL } from "@/types/types";
 import gsap from "gsap";
+import { useAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 
 // Modify the SvgWrapper component
@@ -10,38 +12,49 @@ export function useSvg({ tool }: { tool: TOOL }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const fadeTimerRef = useRef<gsap.core.Tween | null>(null);
   const eraserRef = useRef<number[][]>([]);
+  const [darkMode] = useAtom(darkModeAtom);
 
   useEffect(() => {
     if (svgRef.current) {
       if (tool === "laser") {
         svgRef.current.innerHTML = "";
+        // Use a template string for the SVG content
         svgRef.current.innerHTML = `
-                <defs>
-                <filter id="glow" x="-50%" y="-50%" height="500%" width="500%">
-                <feGaussianBlur stdDeviation="12" result="coloredBlur"/>
-                </filter>
-                <filter id="goo">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
-                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -7" result="goo" />
-                <feBlend in="SourceGraphic" in2="goo" />
-                </filter>
-                </defs>
-                <path  id='path'  fill='none' stroke='#F7374F' stroke-width='25'  filter="url(#glow)" ></path>
-                <path  id='path2' fill='none' stroke='#fff' stroke-linejoin="round" stroke-width='20' stroke-linecap='round' filter="url(#goo)" ></path>
-            `;
+          <defs>
+            <filter id="glow" x="-50%" y="-50%" height="500%" width="500%">
+              <feGaussianBlur stdDeviation="12" result="coloredBlur"/>
+            </filter>
+            <filter id="goo">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+              <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -7" result="goo" />
+              <feBlend in="SourceGraphic" in2="goo" />
+            </filter>
+          </defs>
+          <path id="path" fill="none" stroke="#F7374F" stroke-width="15" filter="url(#glow)"></path>
+          <path id="path2" fill="none" stroke="#fff" stroke-linejoin="round" stroke-width="10" stroke-linecap="round" filter="url(#goo)"></path>
+        `;
       }
 
       if (tool === "eraser") {
-        if (svgRef.current) {
-          svgRef.current.innerHTML = "";
-          svgRef.current.innerHTML = `
-                  <path  id='path' fill='none' stroke='rgba(0, 0, 0, 0.25)' 
-                  stroke-linejoin="round" stroke-width='15' stroke-linecap='round' filter="url(#goo)" ></path>
-              `;
-        }
+        svgRef.current.innerHTML = "";
+        svgRef.current.innerHTML = `
+          <path id="path" fill="none" stroke="rgba(0, 0, 0, 0.25)" stroke-linejoin="round" stroke-width="15" stroke-linecap="round" filter="url(#goo)"></path>
+        `;
       }
     }
   }, [tool]);
+
+  useEffect(() => {
+    if (!svgRef.current) return;
+
+    const path = svgRef.current.querySelector("#path");
+    if (tool === "eraser" && path) {
+      path.setAttribute(
+        "stroke",
+        darkMode ? "rgba(255,255,255,1)" : "rgba(0, 0, 0, 0.25)"
+      );
+    }
+  }, [darkMode]);
 
   useEffect(() => {
     gsap.ticker.fps(50);
@@ -75,17 +88,18 @@ export function useSvg({ tool }: { tool: TOOL }) {
     if (svgRef.current) {
       const newIndex = lineIndex;
 
-      // Create glow path
+      // Create glow path using document.createElementNS
       const path1 = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "path"
       );
       path1.id = `path-${newIndex}`;
+      // Use setAttribute for all SVG attributes (kebab-case is correct here)
       path1.setAttribute("fill", "none");
       path1.setAttribute("stroke", "#F7374F");
-      path1.setAttribute("stroke-width", "25");
+      path1.setAttribute("stroke-width", "15");
       path1.setAttribute("filter", "url(#glow)");
-      path1.setAttribute("opacity", "1"); // Set initial opacity to 1
+      path1.setAttribute("opacity", "1");
 
       // Create white inner path
       const path2 = document.createElementNS(
@@ -96,10 +110,10 @@ export function useSvg({ tool }: { tool: TOOL }) {
       path2.setAttribute("fill", "none");
       path2.setAttribute("stroke", "#fff");
       path2.setAttribute("stroke-linejoin", "round");
-      path2.setAttribute("stroke-width", "20");
+      path2.setAttribute("stroke-width", "10");
       path2.setAttribute("stroke-linecap", "round");
       path2.setAttribute("filter", "url(#goo)");
-      path2.setAttribute("opacity", "1"); // Set initial opacity to 1
+      path2.setAttribute("opacity", "1");
 
       svgRef.current.appendChild(path1);
       svgRef.current.appendChild(path2);

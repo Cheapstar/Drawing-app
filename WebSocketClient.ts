@@ -20,7 +20,7 @@ export class WebSocketClient {
       const type = parsedData.type;
       const payload = parsedData.payload;
 
-      // console.log("Received Message:", parsedData);
+      console.log("Received Message:", parsedData);
       const handlers = this.handlers.get(type) || [];
       handlers?.forEach((handler) => handler(payload));
     };

@@ -1,6 +1,6 @@
 "use client";
 
-import { collabNameAtom, socketAtom } from "@/store/store";
+import { collabNameAtom, darkModeAtom, socketAtom } from "@/store/store";
 import { useAtom } from "jotai";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -17,6 +17,7 @@ export function SessionModal() {
   const [loadingState, setLoadingState] = useState<LoadingState>("none");
   const [socket] = useAtom(socketAtom);
   const [collabName] = useAtom(collabNameAtom);
+  const [darkMode] = useAtom(darkModeAtom);
   const searchParams = useSearchParams();
   const roomId = searchParams.get("join");
 
@@ -50,7 +51,9 @@ export function SessionModal() {
   };
   return (
     <div
-      className="flex flex-col w-full"
+      className={`flex flex-col w-full ${
+        darkMode ? "bg-[#232329] text-white" : "bg-white text-black"
+      } `}
       onClick={(e) => {
         e.stopPropagation();
       }}
@@ -63,8 +66,10 @@ export function SessionModal() {
           <div className="flex flex-col gap-2">
             <p>Name</p>
             <p
-              className="text-md bg-gray-300 font-sans font-normal
-             rounded-md px-3 py-2 grow text-nowrap overflow-hidden text-ellipsis"
+              className={`text-md  font-sans font-normal
+             rounded-md px-3 py-2 grow text-nowrap overflow-hidden text-ellipsis ${
+               darkMode ? "bg-[#727276] text-white" : "bg-gray-300 text-black"
+             } `}
             >
               {collabName}
             </p>
@@ -73,8 +78,10 @@ export function SessionModal() {
             <p className="">Link</p>
             <div className="flex gap-2  w-full ">
               <p
-                className="w-[70%] text-md bg-gray-300 font-sans font-normal
-             rounded-md px-3 py-2 grow text-nowrap overflow-hidden text-ellipsis"
+                className={`w-[70%] text-md  font-sans font-normal
+             rounded-md px-3 py-2 grow text-nowrap overflow-hidden text-ellipsis ${
+               darkMode ? "bg-[#727276] text-white" : "bg-gray-300 text-black"
+             } `}
               >
                 {`http://localhost:3000/collab?join=${roomId}`}
               </p>

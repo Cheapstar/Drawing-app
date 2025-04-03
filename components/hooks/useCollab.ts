@@ -26,6 +26,8 @@ import {
   convertElements,
 } from "@/Geometry/utils";
 import { getTextElementDetails } from "@/Geometry/text/boundingElement";
+import { ImageRecord, ImagesDBSchema } from "./useIndexedDBImages";
+import { IDBPDatabase } from "idb";
 
 interface props {
   drawingElement: Element | null;
@@ -40,6 +42,16 @@ interface props {
   setScale: React.Dispatch<React.SetStateAction<number>>;
   setPanOffset: React.Dispatch<React.SetStateAction<Point>>;
   setElements: SetHistoryState;
+  getImage: (
+    id: string,
+    DB: IDBPDatabase<ImagesDBSchema> | null
+  ) => Promise<ImageRecord | null>;
+  db: IDBPDatabase<ImagesDBSchema> | null;
+  storeImage: (
+    file: File,
+    id: string,
+    name?: string
+  ) => Promise<ImageRecord | null>;
 }
 interface BoardStateType {
   elements: Element[];
@@ -92,6 +104,9 @@ export function useCollab({
   setScale,
   setPanOffset,
   setElements,
+  db,
+  storeImage,
+  getImage,
 }: props) {
   const [socket, setSocket] = useAtom(socketAtom);
   const [collabName, setCollabName] = useAtom(collabNameAtom);
@@ -105,54 +120,67 @@ export function useCollab({
   const [resizeElement, setResizeElement] = useState<Element[]>([]);
   const [remoteEraseElements, setRemoteEraseElements] = useState<Element[]>([]);
   const [remoteUpdatedElement, setRemoteUpdateElement] = useState<Element>();
+  const [imageElements, setImageElements] = useState<Element[]>([]);
+  const [initialData, setInitialData] = useState<Element[]>([]);
 
   useEffect(() => {
-    const connectWebSocket = async () => {
-      const id = crypto.randomUUID();
+    if (db) {
+      console.log("Runnning");
+      const connectWebSocket = async () => {
+        const id = crypto.randomUUID();
 
-      const socketClient = new WebSocketClient(
-        `ws://localhost:8080?userId=${id}`,
-        roomId as string
-      );
+        const socketClient = new WebSocketClient(
+          `ws://localhost:8080?userId=${id}`,
+          roomId as string
+        );
 
-      setSocket(socketClient);
-      setUserId(id);
-      return socketClient;
-    };
+        setSocket(socketClient);
+        setUserId(id);
+        return socketClient;
+      };
 
-    connectWebSocket().then((socketClient) => {
-      socketClient.on("userRegistered", () => {
-        const userName = uniqueNamesGenerator({
-          dictionaries: [names, adjectives],
+      connectWebSocket().then((socketClient) => {
+        socketClient.on("userRegistered", () => {
+          const userName = uniqueNamesGenerator({
+            dictionaries: [names, adjectives],
+          });
+
+          setCollabName(userName);
+          socketClient.send("join-room", { roomId, name: userName });
         });
-
-        setCollabName(userName);
-        socketClient.send("join-room", { roomId, name: userName });
       });
-    });
 
-    function updateMouseMovement(event: MouseEvent) {
-      setMouse({ x: event.clientX, y: event.clientY });
-    }
-
-    function handleBeforeUnload(event: BeforeUnloadEvent) {
-      if (socket && socket.exists()) {
-        socket.send("leave-room", { roomId });
+      function handleBeforeUnload(event: BeforeUnloadEvent) {
+        if (socket && socket.exists()) {
+          socket.send("leave-room", { roomId });
+        }
       }
+      function updateMouseMovement(event: MouseEvent) {
+        setMouse({ x: event.clientX, y: event.clientY });
+      }
+      window.addEventListener("mousemove", updateMouseMovement);
+      window.addEventListener("beforeunload", handleBeforeUnload);
     }
-
-    window.addEventListener("mousemove", updateMouseMovement);
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
     return () => {
-      if (socket && socket.exists()) {
-        socket.send("leave-room", { roomId });
-        socket.close();
+      console.log("Db is");
+      if (db) {
+        if (socket && socket.exists()) {
+          socket.send("leave-room", { roomId });
+          socket.close();
+        }
+        function handleBeforeUnload(event: BeforeUnloadEvent) {
+          if (socket && socket.exists()) {
+            socket.send("leave-room", { roomId });
+          }
+        }
+        function updateMouseMovement(event: MouseEvent) {
+          setMouse({ x: event.clientX, y: event.clientY });
+        }
+        window.removeEventListener("mousemove", updateMouseMovement);
+        window.removeEventListener("beforeunload", handleBeforeUnload);
       }
-      window.removeEventListener("mousemove", updateMouseMovement);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, []);
+  }, [db]);
 
   // Send The New Element Details That is being Drawn
   useEffect(() => {
@@ -222,6 +250,7 @@ export function useCollab({
   useEffect(() => {
     if (socket) {
       socket.on("participant-position", (payload: Participant) => {
+        console.log("Setting the Participant Position");
         setParticpants((curr: Participant[]) => {
           // console.log("Particpants are", curr);
           const index = curr?.findIndex(({ userId }) => {
@@ -276,7 +305,13 @@ export function useCollab({
           if (index === -1) {
             updatedElements.push({ ...element });
           } else {
-            updatedElements[index] = { ...element };
+            updatedElements[index] = {
+              ...updatedElements[index],
+              x1: element.x1,
+              x2: element.x2,
+              y1: element.y1,
+              y2: element.y2,
+            };
           }
 
           return updatedElements;
@@ -293,7 +328,15 @@ export function useCollab({
           if (index === -1) {
             updatedElements.push({ ...element });
           } else {
-            updatedElements[index] = { ...element };
+            updatedElements[index] = {
+              ...updatedElements[index],
+              x1: element.x1,
+              x2: element.x2,
+              y1: element.y1,
+              y2: element.y2,
+              height: element.height,
+              width: element.width,
+            };
           }
 
           return updatedElements;
@@ -310,6 +353,9 @@ export function useCollab({
         setRemoteUpdateElement(payload.element);
       });
 
+      socket.on("add-images", (payload) => {
+        setImageElements(payload.elements);
+      });
       socket.on("remove-participant", (payload) => {
         setParticpants((curr) => {
           const index = curr.findIndex((p) => p.userId === payload.userId);
@@ -329,18 +375,24 @@ export function useCollab({
 
   // Update the Main Elements Array With Recieved Elements
   useEffect(() => {
-    if (!remoteElements || remoteElements.length <= 0) return;
+    if (!remoteElements || remoteElements.length <= 0 || !db) return;
+
     setElements((prevState) => {
+      console.log("Prev State", prevState);
       // First, create a copy of the previous state
       const newState = [...prevState.map((ele) => ({ ...ele }))];
 
       // For each remote element, either update existing or add new
-      remoteElements.forEach((remoteElement) => {
+      remoteElements.forEach(async (remoteElement) => {
         const index = newState.findIndex((ele) => ele.id === remoteElement.id);
 
-        const newElement = convertElement(
+        // Pass all required parameters to convertElement
+        const newElement = await convertElement(
           remoteElement,
-          boardRef as React.RefObject<HTMLCanvasElement>
+          boardRef as React.RefObject<HTMLCanvasElement>,
+          getImage,
+          db,
+          storeImage
         );
 
         if (index === -1) {
@@ -358,7 +410,7 @@ export function useCollab({
     // Clear the remoteElements after they've been processed
     // This is important to prevent reprocessing the same elements
     setRemoteElements([]);
-  }, [remoteElements]);
+  }, [remoteElements, db, setElements]);
 
   // Update the Moved Elements Details
   useEffect(() => {
@@ -378,7 +430,13 @@ export function useCollab({
           newState.push({ ...newElement });
         } else {
           // This is an existing element, update it
-          newState[index] = { ...newElement };
+          newState[index] = {
+            ...newState[index],
+            x1: movedElement.x1,
+            x2: movedElement.x2,
+            y1: movedElement.y1,
+            y2: movedElement.y2,
+          } as Element;
         }
       });
 
@@ -407,7 +465,15 @@ export function useCollab({
           newState.push({ ...newElement });
         } else {
           // This is an existing element, update it
-          newState[index] = { ...newElement };
+          newState[index] = {
+            ...newState[index],
+            x1: resizedElement.x1,
+            x2: resizedElement.x2,
+            y1: resizedElement.y1,
+            y2: resizedElement.y2,
+            height: resizedElement.height,
+            width: resizedElement.width,
+          } as Element;
         }
       });
 
@@ -439,48 +505,93 @@ export function useCollab({
 
   // Update the remote updated Element
   useEffect(() => {
-    if (remoteUpdatedElement) {
+    if (remoteUpdatedElement && db) {
       console.log("Updating the Element");
-      setElements((prevState) => {
-        const index = prevState.findIndex(
-          (ele) => ele.id === remoteUpdatedElement.id
+
+      async function settingUpdatedElements() {
+        const convertedElement = await convertElement(
+          remoteUpdatedElement as Element,
+          boardRef as React.RefObject<HTMLCanvasElement>,
+          getImage,
+          db,
+          storeImage
         );
 
-        if (index == -1) {
-          return prevState;
-        }
+        setElements((prevState) => {
+          const index = prevState.findIndex(
+            (ele) => ele.id === (remoteUpdatedElement as Element).id
+          );
 
-        const newElements = [...prevState.map((ele) => ({ ...ele }))];
-        newElements[index] = convertElement(
-          remoteUpdatedElement,
-          boardRef as React.RefObject<HTMLCanvasElement>
-        ) as Element;
+          if (index == -1) {
+            return prevState;
+          }
 
-        return newElements;
-      });
+          const newElements = [...prevState.map((ele) => ({ ...ele }))];
+
+          newElements[index] = convertedElement as Element;
+
+          return newElements;
+        });
+      }
+      settingUpdatedElements();
     }
-  }, [remoteUpdatedElement]);
+  }, [remoteUpdatedElement, db, setElements]);
+
+  useEffect(() => {
+    if (imageElements.length > 0 && db) {
+      async function settingImageElements() {
+        const convertedElements = await convertElements(
+          imageElements,
+          boardRef as React.RefObject<HTMLCanvasElement>,
+          getImage,
+          db,
+          storeImage
+        );
+
+        setElements((prevState) => [
+          ...prevState,
+          ...(convertedElements as Element[]),
+        ]);
+        setImageElements([]);
+      }
+
+      settingImageElements();
+    }
+  }, [imageElements, db]);
 
   // Load The Initial Data Recieved From The Server
   useEffect(() => {
-    if (socket) {
+    if (socket && db) {
       socket.on("room-joined", (payload: BoardStateType) => {
         console.log("Setting the Params");
 
         setScale(payload.scale);
         setPanOffset(payload.panOffset);
+        setInitialData(payload.elements);
+      });
+    }
+  }, [socket, db]);
 
-        const convertedElements = convertElements(
-          payload.elements,
-          boardRef as React.RefObject<HTMLCanvasElement>
+  useEffect(() => {
+    if (initialData.length > 0 && db) {
+      async function settingInitialData() {
+        const convertedElements = await convertElements(
+          initialData,
+          boardRef as React.RefObject<HTMLCanvasElement>,
+          getImage,
+          db,
+          storeImage
         );
 
         setElements(convertedElements as Element[]);
-      });
+      }
+
+      settingInitialData();
     }
-  }, [socket]);
+  }, [initialData, db]);
   return {
     participants,
     remoteElements,
+    socket,
   };
 }
