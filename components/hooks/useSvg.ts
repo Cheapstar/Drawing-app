@@ -10,9 +10,10 @@ export function useSvg({ tool }: { tool: TOOL }) {
   const linesRef = useRef<number[][][]>([]);
   const [isClicked, setIsClicked] = useState<boolean>(false);
   const svgRef = useRef<SVGSVGElement>(null);
-  const fadeTimerRef = useRef<gsap.core.Tween | null>(null);
-  const eraserRef = useRef<number[][]>([]);
   const [darkMode] = useAtom(darkModeAtom);
+  const eraserRef = useRef<number[][]>([]);
+
+  const fadeTimerRef = useRef<gsap.core.Tween[]>([]);
 
   useEffect(() => {
     if (svgRef.current) {
@@ -70,14 +71,17 @@ export function useSvg({ tool }: { tool: TOOL }) {
           1,
           Math.floor(eraserRef.current.length / 10)
         );
+
         eraserRef.current.splice(0, pointsToRemove);
         updateEraser();
       }
     });
     return () => {
-      if (fadeTimerRef.current) {
-        fadeTimerRef.current.kill();
-      }
+      // Kill all active tweens on unmount
+      fadeTimerRef.current.forEach((tween) => {
+        if (tween) tween.kill();
+      });
+      fadeTimerRef.current = [];
     };
   }, []);
 
@@ -137,29 +141,38 @@ export function useSvg({ tool }: { tool: TOOL }) {
 
   function startFadingLaser() {
     // If there's already a fade animation running, kill it
-    if (fadeTimerRef.current) {
-      fadeTimerRef.current.kill();
-    }
 
     for (let i = 0; i < linesRef.current.length; i++) {
       const path1 = document.getElementById(`path-${i}`);
       const path2 = document.getElementById(`path2-${i}`);
 
       if (path1 && path2) {
+        fadeTimerRef.current.forEach((tween) => {
+          tween.resume();
+        });
+
         path1.setAttribute("opacity", "1");
         path2.setAttribute("opacity", "1");
 
-        gsap.to([path1, path2], {
+        const tween = gsap.to([path1, path2], {
           opacity: 0,
           duration: 8,
           ease: "power3.out",
           onComplete: () => {
             if (path1.parentNode) path1.parentNode.removeChild(path1);
             if (path2.parentNode) path2.parentNode.removeChild(path2);
-
             linesRef.current[i] = [];
+
+            // Remove this tween from the array when it completes
+            const tweenIndex = fadeTimerRef.current.indexOf(tween);
+            if (tweenIndex !== -1) {
+              fadeTimerRef.current.splice(tweenIndex, 1);
+            }
           },
         });
+
+        // Add the new tween to our tracking array
+        fadeTimerRef.current.push(tween);
       }
     }
   }
@@ -177,10 +190,10 @@ export function useSvg({ tool }: { tool: TOOL }) {
     if (tool === "laser") {
       createNewLaserLine();
 
-      if (fadeTimerRef.current) {
-        fadeTimerRef.current.kill();
-        fadeTimerRef.current = null;
-      }
+      fadeTimerRef.current.forEach((tween) => {
+        tween.restart();
+        tween.pause();
+      });
     }
   }
 
