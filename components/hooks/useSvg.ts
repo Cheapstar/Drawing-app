@@ -156,7 +156,7 @@ export function useSvg({ tool }: { tool: TOOL }) {
 
         const tween = gsap.to([path1, path2], {
           opacity: 0,
-          duration: 8,
+          duration: 3,
           ease: "power3.out",
           onComplete: () => {
             if (path1.parentNode) path1.parentNode.removeChild(path1);

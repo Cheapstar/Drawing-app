@@ -5,6 +5,7 @@ import {
   Action,
   Element,
   FreehandElement,
+  ImageElement,
   LineElement,
   Point,
   RectangleElement,
@@ -145,6 +146,7 @@ export function useCollab({
             dictionaries: [names, adjectives],
           });
 
+          console.log("User Name is", userName);
           setCollabName(userName);
           socketClient.send("join-room", { roomId, name: userName });
         });
@@ -199,12 +201,13 @@ export function useCollab({
     }
 
     if (action === "resizing" && selectedElement && socket && socket.exists()) {
+      console.log("Element Resizing");
       socket.send("element-resize", {
         element: selectedElement,
         roomId,
       });
     }
-  }, [selectedElement, socket]);
+  }, [selectedElement, socket, action]);
 
   // erasing Them Elements
   useEffect(() => {
@@ -435,12 +438,10 @@ export function useCollab({
           newState.push({ ...newElement });
         } else {
           // This is an existing element, update it
+          console.log("Updating/Moving the element");
           newState[index] = {
-            ...newState[index],
-            x1: movedElement.x1,
-            x2: movedElement.x2,
-            y1: movedElement.y1,
-            y2: movedElement.y2,
+            ...newElement,
+            url: (newState[index] as ImageElement).url,
           } as Element;
         }
       });
@@ -451,7 +452,7 @@ export function useCollab({
     // Clear the remoteElements after they've been processed
     // This is important to prevent reprocessing the same elements
     setMovingElements([]);
-  }, [movingElements]);
+  }, [movingElements, setElements]);
 
   useEffect(() => {
     if (!resizeElement || resizeElement.length <= 0) return;
@@ -471,13 +472,8 @@ export function useCollab({
         } else {
           // This is an existing element, update it
           newState[index] = {
-            ...newState[index],
-            x1: resizedElement.x1,
-            x2: resizedElement.x2,
-            y1: resizedElement.y1,
-            y2: resizedElement.y2,
-            height: resizedElement.height,
-            width: resizedElement.width,
+            ...newElement,
+            url: (newState[index] as ImageElement).url,
           } as Element;
 
           if (resizedElement.type === "line") {
@@ -493,7 +489,7 @@ export function useCollab({
     // Clear the remoteElements after they've been processed
     // This is important to prevent reprocessing the same elements
     setResizeElement([]);
-  }, [resizeElement]);
+  }, [resizeElement, setElements]);
 
   // Erase Them Elements
   useEffect(() => {
@@ -519,6 +515,8 @@ export function useCollab({
       console.log("Updating the Element");
 
       async function settingUpdatedElements() {
+        console.log("remote update element", remoteUpdatedElement);
+
         const convertedElement = await convertElement(
           remoteUpdatedElement as Element,
           boardRef as React.RefObject<HTMLCanvasElement>,
@@ -529,7 +527,7 @@ export function useCollab({
 
         setElements((prevState) => {
           const index = prevState.findIndex(
-            (ele) => ele.id === (remoteUpdatedElement as Element).id
+            (ele) => ele.id === (convertedElement as Element).id
           );
 
           if (index == -1) {
@@ -542,6 +540,7 @@ export function useCollab({
 
           return newElements;
         });
+        setRemoteUpdateElement(undefined);
       }
       settingUpdatedElements();
     }
