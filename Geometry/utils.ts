@@ -26,16 +26,20 @@ export const getElementAtPosition = (
 ): Partial<Element> | undefined => {
   let result: boolean = false;
 
-  const foundElement = elements.find((element: Element) => {
+  let foundElement: Partial<Element> | undefined;
+
+  for (let i = elements.length - 1; i >= 0; i--) {
     result = checkOnElements(
       point(clientX, clientY),
-      element,
+      elements[i],
       scale as number,
       boardRef
     );
-    return result;
-  });
 
+    if (result) {
+      foundElement = elements[i];
+    }
+  }
   console.log("Found Element Position is ", result);
 
   return foundElement;
