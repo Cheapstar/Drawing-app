@@ -3,6 +3,7 @@ export class WebSocketClient {
   private socket: WebSocket;
   private handlers: Map<string, handlerFn[]> = new Map();
   private roomId: string;
+  private jobQueue: Promise<void> = Promise.resolve();
 
   constructor(url: string, roomId: string) {
     this.socket = new WebSocket(url);
@@ -21,8 +22,17 @@ export class WebSocketClient {
       const payload = parsedData.payload;
 
       console.log("Received Message:", parsedData);
-      const handlers = this.handlers.get(type) || [];
-      handlers?.forEach((handler) => handler(payload));
+
+      const nextJob = this.jobQueue.then(async () => {
+        const handlers = this.handlers.get(type) || [];
+
+        await Promise.all(handlers.map((fn) => fn(payload)));
+      });
+
+      this.jobQueue = nextJob;
+      nextJob.catch((err) => {
+        console.log("Error Occured While executing the Job", err);
+      });
     };
 
     this.socket.onclose = () => {
