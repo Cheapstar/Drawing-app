@@ -1202,6 +1202,7 @@ export function WhiteBoard() {
           }
         }}
         onDragOver={(event) => event.preventDefault()} // Needed to allow dropping
+        className="touch-none"
       >
         <div
           id="svg-wrapper"
@@ -1216,7 +1217,7 @@ export function WhiteBoard() {
 
         <canvas
           ref={boardRef}
-          className={`${darkMode ? "bg-black" : "bg-white"} -z-10`}
+          className={`${darkMode ? "bg-black" : "bg-white"} -z-10 touch-none`}
         />
       </div>
     </div>

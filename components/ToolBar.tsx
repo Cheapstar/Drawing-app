@@ -43,7 +43,7 @@ const BOARD_TOOLS = [
     svg: (
       <svg
         viewBox="0 0 24 24"
-        className="w-6 h-6"
+        className="w-4 h-4"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.5}
@@ -63,7 +63,7 @@ const BOARD_TOOLS = [
     svg: (
       <svg
         viewBox="0 0 22 22"
-        className="w-6 h-6"
+        className="w-4 h-4"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.5}
@@ -81,7 +81,7 @@ const BOARD_TOOLS = [
     svg: (
       <svg
         viewBox="0 0 24 24"
-        className="w-6 h-6"
+        className="w-4 h-4"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.5}
@@ -104,7 +104,7 @@ const BOARD_TOOLS = [
     svg: (
       <svg
         viewBox="0 0 20 20"
-        className="w-6 h-6"
+        className="w-4 h-4"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.5}
@@ -121,7 +121,7 @@ const BOARD_TOOLS = [
     svg: (
       <svg
         viewBox="0 0 20 20"
-        className="w-6 h-6"
+        className="w-4 h-4"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.5}
@@ -139,7 +139,7 @@ const BOARD_TOOLS = [
     svg: (
       <svg
         viewBox="0 0 24 24"
-        className="w-6 h-6"
+        className="w-4 h-4"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.5}
@@ -174,7 +174,7 @@ const BOARD_TOOLS = [
     svg: (
       <svg
         viewBox="0 0 24 24"
-        className="w-6 h-6"
+        className="w-4 h-4"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.5}
@@ -195,18 +195,18 @@ const BOARD_TOOLS = [
         focusable="false"
         role="img"
         viewBox="0 0 20 20"
-        className="w-6 h-6"
+        className="w-4 h-4"
       >
         <g
           fill="none"
           stroke="currentColor"
-          stroke-width="1.25"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+          strokeWidth="1.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
           transform="rotate(90 10 10)"
         >
           <path
-            clip-rule="evenodd"
+            clipRule="evenodd"
             d="m9.644 13.69 7.774-7.773a2.357 2.357 0 0 0-3.334-3.334l-7.773 7.774L8 12l1.643 1.69Z"
           ></path>
           <path d="m13.25 3.417 3.333 3.333M10 10l2-2M5 15l3-3M2.156 17.894l1-1M5.453 19.029l-.144-1.407M2.377 11.887l.866 1.118M8.354 17.273l-1.194-.758M.953 14.652l1.408.13"></path>
@@ -223,13 +223,13 @@ const BOARD_TOOLS = [
         focusable="false"
         role="img"
         viewBox="0 0 20 20"
-        className="w-6 h-6"
+        className="w-4 h-4"
         fill="none"
         stroke="currentColor"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       >
-        <g stroke-width="1.25">
+        <g strokeWidth="1.25">
           <path d="M12.5 6.667h.01"></path>
           <path d="M4.91 2.625h10.18a2.284 2.284 0 0 1 2.285 2.284v10.182a2.284 2.284 0 0 1-2.284 2.284H4.909a2.284 2.284 0 0 1-2.284-2.284V4.909a2.284 2.284 0 0 1 2.284-2.284Z"></path>
           <path d="m3.333 12.5 3.334-3.333c.773-.745 1.726-.745 2.5 0l4.166 4.166"></path>

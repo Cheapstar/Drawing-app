@@ -113,9 +113,9 @@ export function useSvg({ tool }: { tool: TOOL }) {
       path2.id = `path2-${newIndex}`;
       path2.setAttribute("fill", "none");
       path2.setAttribute("stroke", "#fff");
-      path2.setAttribute("stroke-linejoin", "round");
-      path2.setAttribute("stroke-width", "10");
-      path2.setAttribute("stroke-linecap", "round");
+      // path2.setAttribute("stroke-linejoin", "round");
+      // path2.setAttribute("stroke-width", "10");
+      // path2.setAttribute("stroke-linecap", "round");
       path2.setAttribute("filter", "url(#goo)");
       path2.setAttribute("opacity", "1");
 

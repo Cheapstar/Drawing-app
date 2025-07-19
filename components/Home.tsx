@@ -1,5 +1,5 @@
 "use client";
-import { redirect, useRouter } from "next/navigation";
+import { redirect } from "next/navigation";
 import React, { useState, useEffect } from "react";
 import {
   LuArrowRight,

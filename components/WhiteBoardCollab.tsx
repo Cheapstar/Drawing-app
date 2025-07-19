@@ -1151,6 +1151,7 @@ export function CollaborativeWhiteboard() {
         onDoubleClick={(event) => {
           handleDoubleClick(event);
         }}
+        className="touch-none"
       >
         <div
           id="svg-wrapper"
